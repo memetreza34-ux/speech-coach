@@ -9,6 +9,15 @@ import {
 } from './cloudSync'
 
 const AuthContext = createContext(null)
+const TRAINING_KEYS = [
+  'speech-coach-history',
+  'speech-coach-dialog-history',
+  'speech-coach-audio-history',
+]
+
+const getTrainingFingerprint = () => TRAINING_KEYS
+  .map((key) => localStorage.getItem(key) || '')
+  .join('|')
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -19,7 +28,9 @@ export const useAuth = () => {
 export function AuthProvider({ children }) {
   const clientRef = useRef(null)
   const syncTimerRef = useRef(null)
+  const syncIntervalRef = useRef(null)
   const syncPromiseRef = useRef(null)
+  const fingerprintRef = useRef('')
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(() => readLocalProfile())
@@ -41,12 +52,15 @@ export function AuthProvider({ children }) {
         return result
       })
       .catch((error) => {
-        const next = {
-          status: 'error',
-          error: error?.message || 'Synchronisierung fehlgeschlagen.',
-          lastSyncAt: syncStatus?.lastSyncAt || null,
-        }
-        setSyncStatus(next)
+        let next
+        setSyncStatus((current) => {
+          next = {
+            status: 'error',
+            error: error?.message || 'Synchronisierung fehlgeschlagen.',
+            lastSyncAt: current?.lastSyncAt || null,
+          }
+          return next
+        })
         if (!silent) throw error
         return next
       })
@@ -56,7 +70,7 @@ export function AuthProvider({ children }) {
 
     syncPromiseRef.current = task
     return task
-  }, [profile, syncStatus?.lastSyncAt, user])
+  }, [profile, user])
 
   const hydrateSession = useCallback(async (client, nextSession) => {
     setSession(nextSession || null)
@@ -119,18 +133,33 @@ export function AuthProvider({ children }) {
       active = false
       subscription?.unsubscribe()
       if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+      if (syncIntervalRef.current) window.clearInterval(syncIntervalRef.current)
     }
   }, [hydrateSession])
 
   useEffect(() => {
     if (!user || !profile?.syncEnabled) return undefined
 
-    runSync({ silent: true })
+    const synchronizeAndRefreshFingerprint = () => runSync({ silent: true })
+      .finally(() => {
+        fingerprintRef.current = getTrainingFingerprint()
+      })
 
     const scheduleSync = () => {
       if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
-      syncTimerRef.current = window.setTimeout(() => runSync({ silent: true }), 1400)
+      syncTimerRef.current = window.setTimeout(synchronizeAndRefreshFingerprint, 1400)
     }
+
+    fingerprintRef.current = getTrainingFingerprint()
+    synchronizeAndRefreshFingerprint()
+
+    syncIntervalRef.current = window.setInterval(() => {
+      const nextFingerprint = getTrainingFingerprint()
+      if (nextFingerprint !== fingerprintRef.current) {
+        fingerprintRef.current = nextFingerprint
+        scheduleSync()
+      }
+    }, 2500)
 
     window.addEventListener('speechcoach:data-changed', scheduleSync)
     window.addEventListener('online', scheduleSync)
@@ -138,6 +167,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('speechcoach:data-changed', scheduleSync)
       window.removeEventListener('online', scheduleSync)
       if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+      if (syncIntervalRef.current) window.clearInterval(syncIntervalRef.current)
     }
   }, [profile?.syncEnabled, runSync, user])
 
