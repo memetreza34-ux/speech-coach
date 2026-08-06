@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, BarChart3, Bot, MessageCircleMore, Sparkles } from 'lucide-react'
+import { ArrowUpRight, AudioLines, BarChart3, Bot, MessageCircleMore, Sparkles } from 'lucide-react'
 import App from './App.jsx'
+import AudioStudio from './AudioStudio.jsx'
 import ConversationCoach from './ConversationCoach.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
 import './conversation.css'
 import './progress.css'
+import './audio-lab.css'
 import './launchers.css'
 
 export default function RootApp() {
@@ -14,6 +16,7 @@ export default function RootApp() {
 
   const openCoach = () => setActiveView('coach')
   const openProgress = () => setActiveView('progress')
+  const openAudio = () => setActiveView('audio')
   const closeOverlay = () => setActiveView(null)
 
   return (
@@ -44,6 +47,20 @@ export default function RootApp() {
             </motion.button>
 
             <motion.button
+              className="audio-launcher"
+              onClick={openAudio}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="audio-launcher-icon"><AudioLines size={22} /></span>
+              <span className="audio-launcher-copy">
+                <strong>Audio-Labor</strong>
+                <small>Stimme, Dynamik und Pausen</small>
+              </span>
+              <ArrowUpRight size={18} />
+            </motion.button>
+
+            <motion.button
               className="coach-launcher"
               onClick={openCoach}
               whileHover={{ y: -3 }}
@@ -51,7 +68,7 @@ export default function RootApp() {
             >
               <span className="coach-launcher-icon"><Bot size={22} /></span>
               <span className="coach-launcher-copy">
-                <small><Sparkles size={12} /> Neu</small>
+                <small><Sparkles size={12} /> Interaktiv</small>
                 <strong>Live-Coach</strong>
                 <em>Gespräch mit Rückfragen</em>
               </span>
@@ -63,6 +80,7 @@ export default function RootApp() {
 
       <AnimatePresence>
         {activeView === 'coach' && <ConversationCoach key="live-coach" onClose={closeOverlay} />}
+        {activeView === 'audio' && <AudioStudio key="audio-studio" onClose={closeOverlay} />}
         {activeView === 'progress' && (
           <ProgressDashboard
             key="progress-dashboard"
