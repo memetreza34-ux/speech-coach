@@ -16,6 +16,21 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Wiederholung desselben Themas
 - lokaler Trainingsverlauf im Browser
 
+### Audio-Labor
+
+- echte lokale Audiodatei-Aufnahme mit `MediaRecorder`
+- wählbare Aufgabe und Aufnahmedauer
+- Live-Lautstärkevisualisierung
+- automatische Beendigung nach Ablauf der Zeit
+- Wiedergabe der eigenen Originalaufnahme
+- Lautstärke-Zeitleiste mit direkt anwählbaren Stellen
+- automatische Erkennung kurzer, mittlerer und langer Pausen
+- Bewertung von Stimmenergie, Dynamik, Pausengestaltung und Sprachfluss
+- Sprechanteil, Pausenanzahl und längste Pause
+- optionales Browser-Transkript mit Tempo und Füllwortanzahl
+- lokale Verarbeitung ohne automatischen Audio-Upload
+- Speicherung der Kennzahlen im lokalen Fortschrittsverlauf
+
 ### Interaktiver Live-Coach
 
 - sechs Gesprächssimulationen
@@ -32,13 +47,13 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 
 ### Fortschritt und Trainingssteuerung
 
-- gemeinsames Dashboard für Solo-Training und Live-Coach
+- gemeinsames Dashboard für Solo-Training, Audio-Labor und Live-Coach
 - Gesamtniveau aus allen abgeschlossenen Übungen
 - aktuelle Trainingsserie und Wochenziel
 - Sprechzeit, Übungsanzahl und häufigster Trainingsbereich
-- Fähigkeitenprofil für Tempo, Füllwortkontrolle, Klarheit, Struktur und Wirkung
+- Fähigkeitenprofil für Tempo, Füllwortkontrolle, Klarheit, Struktur, Wirkung, Stimm-Dynamik und Pausengestaltung
 - Aktivitätsübersicht für die letzten sieben Tage
-- filterbarer Verlauf für Solo- und Dialogtrainings
+- filterbarer Verlauf für Solo-, Audio- und Dialogtrainings
 - automatische Erkennung des schwächsten verfügbaren Bereichs
 - passende nächste Trainingsempfehlung mit direktem Einstieg
 
@@ -76,13 +91,14 @@ npm run build
 
 Die GitHub-Actions-Prüfung kann zusätzlich manuell über den Workflow `SpeechCoach CI` gestartet werden. Sie ist nicht automatisch aktiv, solange das GitHub-Konto keine Actions-Runner starten kann.
 
-## Technischer Stand
+## Datenschutz und technische Grenzen
 
-Die Solo-Aufnahme verwendet aktuell die Web Speech Recognition API des Browsers. Für eine spätere produktionsreife Version sind zusätzlich vorgesehen:
+Die Audioaufnahme des Audio-Labors bleibt im Browser und wird nur für die aktuelle Ergebnissitzung als temporäre Objekt-URL vorgehalten. Im lokalen Verlauf werden nur Kennzahlen gespeichert. Die browserbasierte Lautstärke- und Pausenanalyse ist ein Trainingsindikator und keine medizinische oder logopädische Beurteilung.
 
-- echte Audiodatei-Aufnahme mit Zeitstempeln
-- zuverlässiger Speech-to-Text-Dienst
-- Pausen-, Lautstärke- und Intonationsanalyse
+Die optionale Live-Transkription hängt von der Web Speech Recognition API des Browsers ab. Für eine spätere produktionsreife Version sind zusätzlich vorgesehen:
+
+- zuverlässiger serverseitiger Speech-to-Text-Dienst mit Zeitstempeln
+- Tonhöhen- und Intonationsanalyse
 - Nutzerkonten und geräteübergreifend synchronisierter Fortschritt
 - adaptive mehrwöchige Trainingspläne
 - mehrpersonige Simulationen
