@@ -72,6 +72,7 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - optionales Speichern von Transkripten; standardmäßig deaktiviert
 - vollständiger JSON-Datenexport für Profil, lokale Trainings und Cloud-Datensätze
 - getrenntes Löschen von Cloud-Verlauf und lokalem Browser-Verlauf
+- Synchronisierung wird bei Löschvorgängen automatisch pausiert, damit gelöschte Daten nicht sofort erneut geladen oder hochgeladen werden
 - endgültige Kontolöschung über eine authentifizierte Supabase Edge Function
 - Audiodateien werden niemals in den Cloud-Verlauf hochgeladen
 - kontogetrennte Browser-Caches verhindern Datenvermischung auf gemeinsam genutzten Geräten
