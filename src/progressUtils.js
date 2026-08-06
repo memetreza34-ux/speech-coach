@@ -7,6 +7,16 @@ const safeRead = (key) => {
   }
 }
 
+const readWeeklyGoal = () => {
+  try {
+    const profile = JSON.parse(localStorage.getItem('speech-coach-account-profile') || 'null')
+    const value = Number(profile?.weeklyGoal)
+    return Number.isFinite(value) ? Math.max(1, Math.min(50, Math.round(value))) : 5
+  } catch {
+    return 5
+  }
+}
+
 const clamp = (value, minimum = 0, maximum = 100) => Math.min(maximum, Math.max(minimum, value))
 const average = (values) => {
   const valid = values.filter((value) => Number.isFinite(value))
@@ -168,7 +178,7 @@ export const readProgressData = () => {
   const favoriteCategory = Object.entries(categoryCounts).sort((left, right) => right[1] - left[1])[0]?.[0] || 'Noch offen'
   const week = buildWeek(sessions)
   const weeklyCount = week.reduce((sum, day) => sum + day.count, 0)
-  const weeklyGoal = 5
+  const weeklyGoal = readWeeklyGoal()
 
   return {
     sessions,
