@@ -57,19 +57,24 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - automatische Erkennung des schwächsten verfügbaren Bereichs
 - passende nächste Trainingsempfehlung mit direktem Einstieg
 
-### Konto und Cloud-Synchronisierung
+### Konto, Sicherheit und Datenschutz
 
 - SpeechCoach bleibt vollständig ohne Konto nutzbar
 - Registrierung und Anmeldung mit E-Mail und Passwort
 - Anmeldung per Magic Link
+- Passwort-Wiederherstellung über geschützten E-Mail-Link
+- Passwortänderung mit aktuellem Passwort
+- Änderung der Anmelde-E-Mail mit Supabase-Bestätigungsfluss
 - dauerhaft gespeicherte und automatisch erneuerte Sitzung
 - persönliche Einstellungen für Anzeigename und Wochenziel
-- automatische Synchronisierung nach lokalen Trainingsänderungen
-- manuelle Synchronisierung und sichtbarer Sync-Status
+- automatische und manuelle Cloud-Synchronisierung
 - geräteübergreifender Verlauf für Solo, Audio-Kennzahlen und Live-Coach
 - optionales Speichern von Transkripten; standardmäßig deaktiviert
+- vollständiger JSON-Datenexport für Profil, lokale Trainings und Cloud-Datensätze
+- getrenntes Löschen von Cloud-Verlauf und lokalem Browser-Verlauf
+- endgültige Kontolöschung über eine authentifizierte Supabase Edge Function
 - Audiodateien werden niemals in den Cloud-Verlauf hochgeladen
-- lokale Fallback-Daten bleiben auch bei fehlender Verbindung verfügbar
+- kontogetrennte Browser-Caches verhindern Datenvermischung auf gemeinsam genutzten Geräten
 
 ## Entwicklung
 
@@ -108,12 +113,24 @@ Der Browser-Client lädt die exakt angegebene Version `@supabase/supabase-js@2.1
 
 ### Auth-Konfiguration
 
-Für Registrierung, Magic Links und Bestätigungs-E-Mails sollten im Supabase-Dashboard folgende URLs eingetragen werden:
+Für Registrierung, Magic Links, Passwort-Wiederherstellung und Bestätigungs-E-Mails müssen im Supabase-Dashboard passende URLs eingetragen werden:
 
 - lokale Entwicklung: `http://localhost:5173`
 - produktive App: die endgültige HTTPS-Domain
 
-Die produktive Domain muss als Site URL beziehungsweise erlaubte Redirect URL in Supabase Auth hinterlegt sein.
+Die produktive Domain muss als Site URL beziehungsweise erlaubte Redirect URL in Supabase Auth hinterlegt sein. Für einen produktiven Versand sollte ein eigener SMTP-Anbieter konfiguriert werden.
+
+### Sichere Kontolöschung
+
+Die Funktion liegt unter:
+
+```text
+supabase/functions/delete-speechcoach-account/
+```
+
+Sie ist im verbundenen Projekt als `delete-speechcoach-account` aktiv und verlangt einen gültigen Benutzer-JWT. Die Funktion prüft zusätzlich die Konto-E-Mail und den exakten Bestätigungstext `KONTO LÖSCHEN`. Erst danach verwendet sie den serverseitigen Service-Role-Kontext, um den Auth-Nutzer endgültig zu löschen. Durch die Foreign Keys mit `ON DELETE CASCADE` werden Profil und Cloud-Trainings automatisch entfernt.
+
+Der Service-Role-Key ist ausschließlich in der Supabase-Laufzeit verfügbar und wird niemals an den Browser übertragen.
 
 ## Echten KI-Coach aktivieren
 
@@ -146,10 +163,11 @@ Die Audioaufnahme des Audio-Labors bleibt im Browser und wird nur für die aktue
 
 Transkripte werden erst dann in neue Cloud-Sitzungen aufgenommen, wenn der Nutzer die entsprechende Kontooption ausdrücklich aktiviert. Bereits ohne Transkript synchronisierte Sitzungen werden nicht nachträglich verändert.
 
+Der JSON-Export kann Kontometadaten, Profilwerte, lokale Trainings und Cloud-Zeilen enthalten. Temporäre Audiodateien sind nicht Bestandteil des Exports, da sie nicht dauerhaft gespeichert werden.
+
 Die optionale Live-Transkription hängt von der Web Speech Recognition API des Browsers ab. Für spätere Ausbaustufen sind zusätzlich vorgesehen:
 
 - zuverlässiger serverseitiger Speech-to-Text-Dienst mit Zeitstempeln
 - Tonhöhen- und Intonationsanalyse
-- Konto-Wiederherstellung und Passwortänderung innerhalb der App
 - adaptive mehrwöchige Trainingspläne
 - mehrpersonige Simulationen
