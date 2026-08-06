@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { getCloudConfiguration, getSupabaseClient, isCloudConfigured } from './supabaseClient'
 import {
+  activateLocalUser,
+  deactivateLocalUser,
   loadOrCreateProfile,
   readLocalProfile,
   readSyncState,
@@ -27,6 +29,7 @@ export const useAuth = () => {
 
 export function AuthProvider({ children }) {
   const clientRef = useRef(null)
+  const activeUserIdRef = useRef(null)
   const syncTimerRef = useRef(null)
   const syncIntervalRef = useRef(null)
   const syncPromiseRef = useRef(null)
@@ -75,8 +78,11 @@ export function AuthProvider({ children }) {
   const hydrateSession = useCallback(async (client, nextSession) => {
     setSession(nextSession || null)
     if (!nextSession) {
+      if (activeUserIdRef.current) deactivateLocalUser(activeUserIdRef.current)
+      activeUserIdRef.current = null
       setUser(null)
-      setProfile(readLocalProfile())
+      setProfile(null)
+      setSyncStatus({ status: 'idle' })
       setLoading(false)
       return
     }
@@ -84,6 +90,8 @@ export function AuthProvider({ children }) {
     try {
       const { data, error } = await client.auth.getUser()
       if (error || !data?.user) throw error || new Error('Sitzung konnte nicht bestätigt werden.')
+      activateLocalUser(data.user.id)
+      activeUserIdRef.current = data.user.id
       setUser(data.user)
       const nextProfile = await loadOrCreateProfile(client, data.user)
       setProfile(nextProfile)
@@ -209,12 +217,20 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     const client = clientRef.current
+    const currentUserId = user?.id || activeUserIdRef.current
+
+    if (profile?.syncEnabled) await runSync({ silent: true })
+
     if (client) {
       const { error } = await client.auth.signOut()
       if (error) throw error
     }
+
+    if (currentUserId) deactivateLocalUser(currentUserId)
+    activeUserIdRef.current = null
     setSession(null)
     setUser(null)
+    setProfile(null)
     setSyncStatus({ status: 'idle' })
   }
 
