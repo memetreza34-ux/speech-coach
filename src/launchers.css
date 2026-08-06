@@ -1,9 +1,74 @@
 .feature-launchers .coach-launcher,
-.feature-launchers .audio-launcher {
+.feature-launchers .audio-launcher,
+.feature-launchers .account-launcher {
   position: static;
   right: auto;
   bottom: auto;
   z-index: auto;
+}
+
+.account-launcher {
+  min-width: 220px;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 13px 8px 8px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+  cursor: pointer;
+}
+
+.account-launcher-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #e0f2fe;
+  background: linear-gradient(135deg, #0284c7, #6d28d9);
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.22);
+}
+
+.account-launcher-copy {
+  min-width: 0;
+  text-align: left;
+}
+
+.account-launcher-copy strong,
+.account-launcher-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-launcher-copy strong {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+}
+
+.account-launcher-copy small {
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 0.63rem;
+}
+
+.account-launcher > svg {
+  color: #7dd3fc;
+}
+
+.launcher-spin {
+  animation: launcher-spin 0.9s linear infinite;
+}
+
+@keyframes launcher-spin {
+  to { transform: rotate(360deg); }
 }
 
 .progress-history-icon.audio {
@@ -19,22 +84,25 @@
 @media (max-width: 680px) {
   .feature-launchers {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
   }
 
   .feature-launchers .coach-launcher,
   .feature-launchers .progress-launcher,
-  .feature-launchers .audio-launcher {
+  .feature-launchers .audio-launcher,
+  .feature-launchers .account-launcher {
     min-width: 0;
     min-height: 58px;
     width: 100%;
     padding: 8px;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .feature-launchers .audio-launcher-copy small,
-  .feature-launchers .audio-launcher > svg:last-child {
+  .feature-launchers .account-launcher-copy small,
+  .feature-launchers .audio-launcher > svg:last-child,
+  .feature-launchers .account-launcher > svg:last-child {
     display: none;
   }
 
@@ -45,13 +113,14 @@
 
 @media (max-width: 480px) {
   .feature-launchers {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 7px;
   }
 
   .feature-launchers .coach-launcher,
   .feature-launchers .progress-launcher,
-  .feature-launchers .audio-launcher {
+  .feature-launchers .audio-launcher,
+  .feature-launchers .account-launcher {
     display: flex;
     justify-content: center;
     min-height: 54px;
@@ -60,7 +129,14 @@
 
   .feature-launchers .coach-launcher-copy,
   .feature-launchers .progress-launcher-copy,
-  .feature-launchers .audio-launcher-copy {
+  .feature-launchers .audio-launcher-copy,
+  .feature-launchers .account-launcher-copy {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-spin {
+    animation-duration: 0.01ms;
   }
 }
