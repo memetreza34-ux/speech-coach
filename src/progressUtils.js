@@ -68,9 +68,9 @@ const normalizeDialog = (item) => ({
   details: {
     pace: null,
     fillerControl: null,
-    clarity: Number(item.scores?.clarity) || null,
-    structure: Number(item.scores?.structure) || null,
-    impact: Number(item.scores?.impact) || null,
+    clarity: Number.isFinite(Number(item.scores?.clarity)) ? Number(item.scores.clarity) : null,
+    structure: Number.isFinite(Number(item.scores?.structure)) ? Number(item.scores.structure) : null,
+    impact: Number.isFinite(Number(item.scores?.impact)) ? Number(item.scores.impact) : null,
   },
   meta: `${item.difficulty || 'Simulation'} · ${Number(item.rounds) || 0} Runden`,
 })
