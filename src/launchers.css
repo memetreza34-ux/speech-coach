@@ -1,4 +1,5 @@
-.feature-launchers .coach-launcher {
+.feature-launchers .coach-launcher,
+.feature-launchers .audio-launcher {
   position: static;
   right: auto;
   bottom: auto;
@@ -6,8 +7,46 @@
 }
 
 @media (max-width: 680px) {
+  .feature-launchers {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
   .feature-launchers .coach-launcher,
-  .feature-launchers .progress-launcher {
+  .feature-launchers .progress-launcher,
+  .feature-launchers .audio-launcher {
+    min-width: 0;
     min-height: 58px;
+    width: 100%;
+    padding: 8px;
+    grid-template-columns: auto 1fr;
+  }
+
+  .feature-launchers .audio-launcher-copy small,
+  .feature-launchers .audio-launcher > svg:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .feature-launchers {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+
+  .feature-launchers .coach-launcher,
+  .feature-launchers .progress-launcher,
+  .feature-launchers .audio-launcher {
+    display: flex;
+    justify-content: center;
+    min-height: 54px;
+    border-radius: 15px;
+  }
+
+  .feature-launchers .coach-launcher-copy,
+  .feature-launchers .progress-launcher-copy,
+  .feature-launchers .audio-launcher-copy {
+    display: none;
   }
 }
