@@ -6,6 +6,16 @@
   z-index: auto;
 }
 
+.progress-history-icon.audio {
+  color: #a5f3fc;
+  background: rgba(8, 145, 178, 0.13);
+  border-color: rgba(34, 211, 238, 0.2);
+}
+
+.progress-filter-tabs {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 680px) {
   .feature-launchers {
     display: grid;
@@ -26,6 +36,10 @@
   .feature-launchers .audio-launcher-copy small,
   .feature-launchers .audio-launcher > svg:last-child {
     display: none;
+  }
+
+  .progress-filter-tabs button {
+    min-width: 68px;
   }
 }
 
