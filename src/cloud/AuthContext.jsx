@@ -385,10 +385,18 @@ export function AuthProvider({ children }) {
     return result
   }
 
-  const removeLocalTraining = () => {
-    if (!user) throw new Error('Du bist nicht angemeldet.')
+  const removeLocalTraining = async () => {
+    const client = clientRef.current
+    if (!client || !user || !profile) throw new Error('Du bist nicht angemeldet.')
+    let nextProfile = profile
+    if (profile.syncEnabled) {
+      nextProfile = await updateCloudProfile(client, user, { ...profile, syncEnabled: false })
+      setProfile(nextProfile)
+    }
     clearLocalTrainingData(user.id)
     fingerprintRef.current = getTrainingFingerprint()
+    setSyncStatus({ status: 'disabled', lastSyncAt: null, uploaded: 0, downloaded: 0 })
+    return { syncPaused: nextProfile.syncEnabled === false }
   }
 
   const deleteAccount = async ({ email, confirmation }) => {
