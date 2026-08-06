@@ -30,6 +30,18 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Gesamtauswertung mit Stärken und Verbesserungen
 - lokaler Ersatzmodus, wenn keine KI-Verbindung eingerichtet ist
 
+### Fortschritt und Trainingssteuerung
+
+- gemeinsames Dashboard für Solo-Training und Live-Coach
+- Gesamtniveau aus allen abgeschlossenen Übungen
+- aktuelle Trainingsserie und Wochenziel
+- Sprechzeit, Übungsanzahl und häufigster Trainingsbereich
+- Fähigkeitenprofil für Tempo, Füllwortkontrolle, Klarheit, Struktur und Wirkung
+- Aktivitätsübersicht für die letzten sieben Tage
+- filterbarer Verlauf für Solo- und Dialogtrainings
+- automatische Erkennung des schwächsten verfügbaren Bereichs
+- passende nächste Trainingsempfehlung mit direktem Einstieg
+
 ## Entwicklung
 
 ```bash
@@ -62,6 +74,8 @@ npm run lint
 npm run build
 ```
 
+Die GitHub-Actions-Prüfung kann zusätzlich manuell über den Workflow `SpeechCoach CI` gestartet werden. Sie ist nicht automatisch aktiv, solange das GitHub-Konto keine Actions-Runner starten kann.
+
 ## Technischer Stand
 
 Die Solo-Aufnahme verwendet aktuell die Web Speech Recognition API des Browsers. Für eine spätere produktionsreife Version sind zusätzlich vorgesehen:
@@ -69,6 +83,6 @@ Die Solo-Aufnahme verwendet aktuell die Web Speech Recognition API des Browsers.
 - echte Audiodatei-Aufnahme mit Zeitstempeln
 - zuverlässiger Speech-to-Text-Dienst
 - Pausen-, Lautstärke- und Intonationsanalyse
-- Nutzerkonten und synchronisierter Fortschritt
-- personalisierte Trainingspläne
+- Nutzerkonten und geräteübergreifend synchronisierter Fortschritt
+- adaptive mehrwöchige Trainingspläne
 - mehrpersonige Simulationen
