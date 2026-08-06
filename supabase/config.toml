@@ -1,0 +1,5 @@
+project_id = "jmswsgwnvmvsfayeodcd"
+
+[functions.delete-speechcoach-account]
+verify_jwt = true
+entrypoint = "./functions/delete-speechcoach-account/index.ts"
