@@ -6,6 +6,8 @@ const LOCAL_STORES = {
 
 const PROFILE_KEY = 'speech-coach-account-profile'
 const SYNC_STATE_KEY = 'speech-coach-sync-state'
+const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
+const USER_CACHE_PREFIX = 'speech-coach-user-cache:'
 
 const safeReadArray = (key) => {
   try {
@@ -16,12 +18,74 @@ const safeReadArray = (key) => {
   }
 }
 
+const safeReadObject = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null')
+    return value && typeof value === 'object' ? value : null
+  } catch {
+    return null
+  }
+}
+
 const safeWrite = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
     // Local storage is optional. Cloud sync can still continue.
   }
+}
+
+const readCurrentStores = () => ({
+  solo: safeReadArray(LOCAL_STORES.solo),
+  dialog: safeReadArray(LOCAL_STORES.dialog),
+  audio: safeReadArray(LOCAL_STORES.audio),
+})
+
+const writeCurrentStores = (stores) => {
+  Object.entries(LOCAL_STORES).forEach(([type, key]) => {
+    safeWrite(key, Array.isArray(stores?.[type]) ? stores[type] : [])
+  })
+}
+
+const hasTrainingData = (stores) => Object.values(stores).some((items) => items.length > 0)
+
+const cacheKeyForUser = (userId) => `${USER_CACHE_PREFIX}${userId}`
+
+const stashCurrentStores = (userId) => {
+  if (!userId) return
+  safeWrite(cacheKeyForUser(userId), readCurrentStores())
+}
+
+export const activateLocalUser = (userId) => {
+  if (!userId) return
+  const activeOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
+  if (activeOwner === userId) return
+
+  if (activeOwner) stashCurrentStores(activeOwner)
+
+  const currentStores = readCurrentStores()
+  const cachedStores = safeReadObject(cacheKeyForUser(userId))
+
+  if (!activeOwner && hasTrainingData(currentStores)) {
+    // The first account on a device may adopt previously anonymous training.
+    stashCurrentStores(userId)
+  } else {
+    writeCurrentStores(cachedStores || { solo: [], dialog: [], audio: [] })
+  }
+
+  localStorage.setItem(ACTIVE_OWNER_KEY, userId)
+  window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'account-activated' } }))
+}
+
+export const deactivateLocalUser = (userId) => {
+  const activeOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
+  if (userId && activeOwner === userId) stashCurrentStores(userId)
+
+  writeCurrentStores({ solo: [], dialog: [], audio: [] })
+  localStorage.removeItem(ACTIVE_OWNER_KEY)
+  localStorage.removeItem(PROFILE_KEY)
+  localStorage.removeItem(SYNC_STATE_KEY)
+  window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'account-deactivated' } }))
 }
 
 const clonePayload = (value) => {
@@ -101,27 +165,14 @@ export const dispatchTrainingDataChanged = (source = 'unknown') => {
   window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source } }))
 }
 
-export const readLocalProfile = () => {
-  try {
-    const value = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null')
-    return value && typeof value === 'object' ? value : null
-  } catch {
-    return null
-  }
-}
+export const readLocalProfile = () => safeReadObject(PROFILE_KEY)
 
 export const saveLocalProfile = (profile) => {
   safeWrite(PROFILE_KEY, profile)
   window.dispatchEvent(new CustomEvent('speechcoach:profile-changed', { detail: profile }))
 }
 
-export const readSyncState = () => {
-  try {
-    return JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || 'null')
-  } catch {
-    return null
-  }
-}
+export const readSyncState = () => safeReadObject(SYNC_STATE_KEY)
 
 const saveSyncState = (state) => safeWrite(SYNC_STATE_KEY, state)
 
@@ -200,12 +251,7 @@ export const syncTrainingData = async (client, user, profile) => {
     return state
   }
 
-  const localByType = {
-    solo: safeReadArray(LOCAL_STORES.solo),
-    dialog: safeReadArray(LOCAL_STORES.dialog),
-    audio: safeReadArray(LOCAL_STORES.audio),
-  }
-
+  const localByType = readCurrentStores()
   const rows = Object.entries(localByType).flatMap(([type, items]) => (
     items.map((item) => toCloudRow(type, item, user.id, profile?.storeTranscripts === true))
   ))
@@ -224,6 +270,7 @@ export const syncTrainingData = async (client, user, profile) => {
   const { data: cloudRows, error: downloadError } = await client
     .from('speechcoach_sessions')
     .select('client_id, session_type, payload, started_at')
+    .eq('user_id', user.id)
     .order('started_at', { ascending: false })
     .limit(500)
 
@@ -240,6 +287,8 @@ export const syncTrainingData = async (client, user, profile) => {
     downloaded += rowsByType[type].filter((item) => !localIds.has(String(item.id))).length
     safeWrite(key, mergeSessions(localByType[type], rowsByType[type]))
   })
+
+  stashCurrentStores(user.id)
 
   const state = {
     status: 'synced',
