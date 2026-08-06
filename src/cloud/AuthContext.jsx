@@ -223,7 +223,6 @@ export function AuthProvider({ children }) {
     if (!client || !user) throw new Error('Du bist nicht angemeldet.')
     const saved = await updateCloudProfile(client, user, nextProfile)
     setProfile(saved)
-    if (saved.syncEnabled) window.setTimeout(() => runSync({ silent: true }), 0)
     return saved
   }
 
