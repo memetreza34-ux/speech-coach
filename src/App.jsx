@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Mic, Briefcase, Play, Square, ChevronLeft, Activity, Gauge, MessageSquare, Zap } from 'lucide-react'
 import './App.css'
 
 // --- Simple Utility to count filler words ---
@@ -14,41 +16,93 @@ const countFillerWords = (text) => {
   return count;
 };
 
+// --- Framer Motion Variants ---
+const pageVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+  exit: { opacity: 0, y: -20, transition: { duration: 0.3 } }
+};
+
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.1 } }
+};
+
+const staggerItem = {
+  initial: { opacity: 0, y: 15 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+};
+
 // --- Home Screen Component ---
 const HomeScreen = ({ onStart }) => {
   return (
-    <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-      <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>
-        Speech<span className="gradient-text">Coach</span>
-      </h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '3rem' }}>
-        Meistere jede Rhetorik-Situation.
-      </p>
+    <motion.div 
+      className="app-container" 
+      style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        transition={{ duration: 0.6, ease: "backOut" }}
+      >
+        <Zap size={48} color="var(--accent-purple)" style={{ margin: '0 auto 1rem' }} />
+        <h1 style={{ fontSize: '2.8rem', marginBottom: '0.5rem', fontWeight: '800' }}>
+          Speech<span className="gradient-text">Coach</span>
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '3rem', fontSize: '1.1rem' }}>
+          Meistere jede Rhetorik-Situation.
+        </p>
+      </motion.div>
 
-      <div className="glass-panel" style={{ width: '100%', marginBottom: '1.5rem', textAlign: 'left' }}>
-        <h3 style={{ marginBottom: '1rem' }}>Wähle deinen Modus:</h3>
+      <motion.div 
+        className="glass-panel" 
+        style={{ width: '100%', marginBottom: '1.5rem', textAlign: 'left', padding: '2rem' }}
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.h3 variants={staggerItem} style={{ marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Wähle deine Arena:</motion.h3>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <button 
+          <motion.button 
+            variants={staggerItem}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             className="btn-secondary" 
-            style={{ textAlign: 'left', padding: '1rem' }}
+            style={{ textAlign: 'left', padding: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}
             onClick={() => onStart('impromptu')}
           >
-            <div style={{ fontSize: '1.1rem', marginBottom: '0.3rem', color: 'var(--text-primary)' }}>🎙️ Freies Sprechen (Impromptu)</div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '400' }}>1 Minute zu einem zufälligen Thema reden.</div>
-          </button>
+            <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.8rem', borderRadius: '12px' }}>
+              <Mic size={24} color="var(--accent-blue)" />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.1rem', marginBottom: '0.2rem', color: 'var(--text-primary)', fontWeight: '600' }}>Freies Sprechen (Impromptu)</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '400' }}>1 Minute zu einem zufälligen Thema reden.</div>
+            </div>
+          </motion.button>
           
-          <button 
+          <motion.button 
+            variants={staggerItem}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             className="btn-secondary" 
-            style={{ textAlign: 'left', padding: '1rem' }}
+            style={{ textAlign: 'left', padding: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}
             onClick={() => onStart('interview')}
           >
-            <div style={{ fontSize: '1.1rem', marginBottom: '0.3rem', color: 'var(--accent-purple)' }}>👔 HR-Manager Interview</div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '400' }}>Simuliertes Bewerbungsgespräch.</div>
-          </button>
+            <div style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '0.8rem', borderRadius: '12px' }}>
+              <Briefcase size={24} color="var(--accent-purple)" />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.1rem', marginBottom: '0.2rem', color: 'var(--text-primary)', fontWeight: '600' }}>HR-Manager Interview</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '400' }}>Knallharte Bewerbungssimulation.</div>
+            </div>
+          </motion.button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -64,7 +118,6 @@ const RecorderScreen = ({ mode, onFinish, onCancel }) => {
     : "HR-Manager: 'Erzählen Sie mir von einer Situation, in der Sie unter Druck arbeiten mussten.'";
 
   useEffect(() => {
-    // Check for browser support
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -83,7 +136,6 @@ const RecorderScreen = ({ mode, onFinish, onCancel }) => {
       recognitionRef.current = recognition;
     } else {
       console.warn("Speech Recognition API not supported in this browser.");
-      // Fallback for browsers without support
       setTranscript("Dein Browser unterstützt leider keine Spracherkennung. (Nutze Chrome)");
     }
     
@@ -107,7 +159,6 @@ const RecorderScreen = ({ mode, onFinish, onCancel }) => {
     }
   };
 
-  // Timer logic
   useEffect(() => {
     let interval;
     if (isRecording) {
@@ -128,59 +179,81 @@ const RecorderScreen = ({ mode, onFinish, onCancel }) => {
   };
 
   return (
-    <div className="app-container" style={{ position: 'relative' }}>
+    <motion.div 
+      className="app-container" 
+      style={{ position: 'relative' }}
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
       <button 
-        style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}
+        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', position: 'absolute', top: '1.5rem', left: '1.5rem', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}
         onClick={onCancel}
       >
-        ← Zurück
+        <ChevronLeft size={20} /> Zurück
       </button>
       
-      <div style={{ textAlign: 'center', marginTop: '3rem', marginBottom: '2rem' }}>
-        <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--accent-blue)', marginBottom: '0.5rem', fontWeight: '600' }}>
-          {mode === 'impromptu' ? 'Impromptu Mode' : 'Interview Mode'}
+      <div style={{ textAlign: 'center', marginTop: '4rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--accent-blue)', marginBottom: '0.8rem', fontWeight: '700' }}>
+          {mode === 'impromptu' ? 'Impromptu Arena' : 'Interview Arena'}
         </div>
-        <h2 style={{ fontSize: '1.4rem', lineHeight: '1.4' }}>{promptText}</h2>
+        <h2 style={{ fontSize: '1.4rem', lineHeight: '1.5', fontWeight: '500' }}>{promptText}</h2>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-        <div className={`visualizer ${isRecording ? 'recording' : ''}`} style={{
-          width: '180px',
-          height: '180px',
-          borderRadius: '50%',
-          background: isRecording ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-          border: `2px solid ${isRecording ? 'var(--accent-purple)' : 'var(--glass-border)'}`,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          boxShadow: isRecording ? '0 0 40px rgba(139, 92, 246, 0.4)' : 'none',
-          transition: 'all 0.3s ease',
-          marginBottom: '2rem'
-        }}>
-          <div style={{ fontSize: '2.5rem', opacity: isRecording ? 1 : 0.5 }}>
-            {isRecording ? '🎙️' : 'Ready'}
-          </div>
-        </div>
         
-        <div style={{ fontSize: '2.5rem', fontFamily: 'var(--font-heading)', fontWeight: '300', marginBottom: '1rem' }}>
+        {/* Pulsating Visualizer */}
+        <motion.div 
+          style={{
+            width: '180px',
+            height: '180px',
+            borderRadius: '50%',
+            background: isRecording ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+            border: `2px solid ${isRecording ? 'var(--accent-purple)' : 'var(--glass-border)'}`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: '2.5rem'
+          }}
+          animate={
+            isRecording 
+              ? { scale: [1, 1.08, 1], boxShadow: ['0 0 0px rgba(139, 92, 246, 0)', '0 0 50px rgba(139, 92, 246, 0.4)', '0 0 0px rgba(139, 92, 246, 0)'] } 
+              : { scale: 1, boxShadow: 'none' }
+          }
+          transition={{ repeat: isRecording ? Infinity : 0, duration: 1.5, ease: "easeInOut" }}
+        >
+          <Mic size={50} color={isRecording ? "var(--accent-purple)" : "var(--text-secondary)"} />
+        </motion.div>
+        
+        <div style={{ fontSize: '3rem', fontFamily: 'var(--font-heading)', fontWeight: '300', marginBottom: '1.5rem', letterSpacing: '2px' }}>
           {formatTime(timeMs)}
         </div>
         
-        <p style={{ color: 'var(--text-secondary)', minHeight: '60px', textAlign: 'center', fontSize: '0.9rem', fontStyle: 'italic', padding: '0 1rem' }}>
+        <p style={{ color: 'var(--text-secondary)', minHeight: '80px', textAlign: 'center', fontSize: '1rem', fontStyle: 'italic', padding: '0 2rem' }}>
           {transcript || (isRecording ? "Höre zu..." : "Drücke den Button um zu starten")}
         </p>
       </div>
 
       <div style={{ marginTop: 'auto', marginBottom: '1rem' }}>
-        <button 
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.95 }}
           className="btn-primary" 
-          style={{ background: isRecording ? '#ef4444' : '', boxShadow: isRecording ? '0 4px 20px rgba(239, 68, 68, 0.4)' : '' }}
+          style={{ 
+            background: isRecording ? '#ef4444' : '', 
+            boxShadow: isRecording ? '0 4px 20px rgba(239, 68, 68, 0.4)' : '',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
           onClick={toggleRecording}
         >
-          {isRecording ? '⏹ Aufnahme beenden' : '⏺ Starten'}
-        </button>
+          {isRecording ? <><Square size={20} fill="currentColor" /> Aufnahme beenden</> : <><Play size={20} fill="currentColor" /> Starten</>}
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -195,49 +268,73 @@ const FeedbackScreen = ({ transcript, timeMs, onHome }) => {
   if (wpm > 160) pacingStatus = "Zu schnell (Gehetzt)";
 
   return (
-    <div className="app-container" style={{ overflowY: 'auto' }}>
-      <h2 style={{ fontSize: '2rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+    <motion.div 
+      className="app-container" 
+      style={{ overflowY: 'auto', paddingBottom: '2rem' }}
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <h2 style={{ fontSize: '2.2rem', marginBottom: '2rem', textAlign: 'center' }}>
         Dein <span className="gradient-text">Feedback</span>
       </h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="glass-panel" style={{ padding: '1rem', textAlign: 'center' }}>
+      <motion.div 
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div variants={staggerItem} className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
+          <Activity size={24} color={fillers > 5 ? '#ef4444' : 'var(--accent-purple)'} style={{ margin: '0 auto 0.5rem' }} />
           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Füllwörter</div>
-          <div style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', color: fillers > 5 ? '#ef4444' : 'var(--accent-purple)' }}>
+          <div style={{ fontSize: '2.5rem', fontFamily: 'var(--font-heading)', fontWeight: '700', color: fillers > 5 ? '#ef4444' : 'var(--text-primary)' }}>
             {fillers}
           </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Erkannt</div>
-        </div>
+        </motion.div>
         
-        <div className="glass-panel" style={{ padding: '1rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Sprechtempo</div>
-          <div style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', color: 'var(--accent-blue)' }}>
+        <motion.div variants={staggerItem} className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
+          <Gauge size={24} color="var(--accent-blue)" style={{ margin: '0 auto 0.5rem' }} />
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Tempo</div>
+          <div style={{ fontSize: '2.5rem', fontFamily: 'var(--font-heading)', fontWeight: '700', color: 'var(--text-primary)' }}>
             {wpm}
           </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>WPM ({pacingStatus})</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>{pacingStatus}</div>
+        </motion.div>
+      </motion.div>
+
+      <motion.div 
+        className="glass-panel" 
+        style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid rgba(139, 92, 246, 0.3)' }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }}>
+          <MessageSquare size={18} color="var(--accent-purple)" />
+          <h3 style={{ color: 'var(--accent-purple)', fontSize: '1.1rem' }}>KI-Tipp</h3>
         </div>
-      </div>
-
-      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: 'var(--accent-purple)' }}>Transkript:</h3>
-        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem' }}>
-          {transcript ? `"${transcript}"` : "Keine Sprache erkannt."}
-        </p>
-      </div>
-      
-      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '2rem', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-        <h3 style={{ marginBottom: '0.5rem', color: 'var(--accent-blue)' }}>KI-Tipp</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
           {fillers > 3 
-            ? "Du hast einige Füllwörter benutzt. Versuche anstelle eines 'Ähms' lieber eine bewusste 1-sekündige Pause zu machen. Das wirkt charismatischer!" 
-            : "Super! Du sprichst sehr flüssig und nutzt kaum Füllwörter. Arbeite als Nächstes an mehr Emotion in deiner Stimme."}
+            ? "Du hast einige Füllwörter benutzt. Versuche anstelle eines 'Ähms' lieber eine bewusste 1-sekündige Pause zu machen. Das wirkt extrem souverän!" 
+            : "Super! Du sprichst sehr flüssig und nutzt kaum Füllwörter. Ein charismatischer Auftritt."}
         </p>
-      </div>
+      </motion.div>
 
-      <button className="btn-secondary" onClick={onHome} style={{ marginTop: 'auto' }}>
-        Zurück zum Start
-      </button>
-    </div>
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="btn-secondary" 
+        onClick={onHome} 
+        style={{ marginTop: 'auto', padding: '1.2rem' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+      >
+        Zurück zur Arena
+      </motion.button>
+    </motion.div>
   );
 };
 
@@ -258,23 +355,27 @@ function App() {
   };
 
   return (
-    <>
-      {screen === 'home' && <HomeScreen onStart={handleStart} />}
-      {screen === 'recorder' && (
-        <RecorderScreen 
-          mode={mode} 
-          onFinish={handleFinish} 
-          onCancel={() => setScreen('home')} 
-        />
-      )}
-      {screen === 'feedback' && (
-        <FeedbackScreen 
-          transcript={sessionData.transcript} 
-          timeMs={sessionData.timeMs}
-          onHome={() => setScreen('home')} 
-        />
-      )}
-    </>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      <AnimatePresence mode="wait">
+        {screen === 'home' && <HomeScreen key="home" onStart={handleStart} />}
+        {screen === 'recorder' && (
+          <RecorderScreen 
+            key="recorder"
+            mode={mode} 
+            onFinish={handleFinish} 
+            onCancel={() => setScreen('home')} 
+          />
+        )}
+        {screen === 'feedback' && (
+          <FeedbackScreen 
+            key="feedback"
+            transcript={sessionData.transcript} 
+            timeMs={sessionData.timeMs}
+            onHome={() => setScreen('home')} 
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
