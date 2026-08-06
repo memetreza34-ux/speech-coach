@@ -11,6 +11,85 @@ import {
 } from './cloudSync'
 
 const AuthContext = createContext(null)
+
+const LOCAL_STORES = {
+  solo: 'speech-coach-history',
+  dialog: 'speech-coach-dialog-history',
+  audio: 'speech-coach-audio-history',
+}
+const PROFILE_KEY = 'speech-coach-account-profile'
+const SYNC_STATE_KEY = 'speech-coach-sync-state'
+const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
+const USER_CACHE_PREFIX = 'speech-coach-user-cache:'
+
+const safeReadArray = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+const writeEmptyTrainingStores = () => {
+  Object.values(LOCAL_STORES).forEach((key) => localStorage.setItem(key, '[]'))
+  window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'privacy-center' } }))
+}
+
+const clearLocalTrainingData = (userId) => {
+  writeEmptyTrainingStores()
+  if (userId) localStorage.setItem(`${USER_CACHE_PREFIX}${userId}`, JSON.stringify({ solo: [], dialog: [], audio: [] }))
+}
+
+const purgeLocalAccountData = (userId) => {
+  clearLocalTrainingData(userId)
+  if (userId) localStorage.removeItem(`${USER_CACHE_PREFIX}${userId}`)
+  localStorage.removeItem(ACTIVE_OWNER_KEY)
+  localStorage.removeItem(PROFILE_KEY)
+  localStorage.removeItem(SYNC_STATE_KEY)
+}
+
+const exportAccountData = async (client, currentUser, currentProfile) => {
+  const [{ data: cloudSessions, error: sessionError }, { data: cloudProfile, error: profileError }] = await Promise.all([
+    client.from('speechcoach_sessions').select('*').order('started_at', { ascending: false }).limit(1000),
+    client.from('speechcoach_profiles').select('*').eq('user_id', currentUser.id).maybeSingle(),
+  ])
+  if (sessionError) throw sessionError
+  if (profileError) throw profileError
+
+  return {
+    exportVersion: 1,
+    generatedAt: new Date().toISOString(),
+    account: {
+      id: currentUser.id,
+      email: currentUser.email || '',
+      createdAt: currentUser.created_at || null,
+      lastSignInAt: currentUser.last_sign_in_at || null,
+    },
+    profile: cloudProfile || currentProfile || null,
+    localTraining: {
+      solo: safeReadArray(LOCAL_STORES.solo),
+      dialog: safeReadArray(LOCAL_STORES.dialog),
+      audio: safeReadArray(LOCAL_STORES.audio),
+    },
+    cloudTraining: cloudSessions || [],
+    notes: {
+      audioFilesIncluded: false,
+      transcriptsMayBeExcluded: currentProfile?.storeTranscripts !== true,
+    },
+  }
+}
+
+const deleteCloudTrainingData = async (client, currentUser) => {
+  const { data, error } = await client
+    .from('speechcoach_sessions')
+    .delete()
+    .eq('user_id', currentUser.id)
+    .select('id')
+  if (error) throw error
+  return { deleted: data?.length || 0 }
+}
+
 const TRAINING_KEYS = [
   'speech-coach-history',
   'speech-coach-dialog-history',
@@ -20,6 +99,20 @@ const TRAINING_KEYS = [
 const getTrainingFingerprint = () => TRAINING_KEYS
   .map((key) => localStorage.getItem(key) || '')
   .join('|')
+
+const recoveryRedirectUrl = () => {
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.hash = ''
+  url.searchParams.set('recovery', '1')
+  return url.toString()
+}
+
+const removeRecoveryMarker = () => {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('recovery')
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+}
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -39,6 +132,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(() => readLocalProfile())
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState('')
+  const [passwordRecovery, setPasswordRecovery] = useState(() => new URLSearchParams(window.location.search).get('recovery') === '1')
   const [syncStatus, setSyncStatus] = useState(() => readSyncState() || { status: 'idle' })
   const configuration = useMemo(() => getCloudConfiguration(), [])
 
@@ -122,7 +216,8 @@ export function AuthProvider({ children }) {
         if (error) throw error
         await hydrateSession(client, data.session)
 
-        const authListener = client.auth.onAuthStateChange((_event, nextSession) => {
+        const authListener = client.auth.onAuthStateChange((event, nextSession) => {
+          if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
           window.setTimeout(() => {
             if (active) hydrateSession(client, nextSession)
           }, 0)
@@ -215,6 +310,37 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }
 
+  const requestPasswordReset = async (email) => {
+    const client = clientRef.current || await getSupabaseClient()
+    if (!client) throw new Error('Cloud-Anmeldung ist nicht konfiguriert.')
+    const { error } = await client.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: recoveryRedirectUrl(),
+    })
+    if (error) throw error
+  }
+
+  const updatePassword = async ({ password, currentPassword = '' }) => {
+    const client = clientRef.current
+    if (!client || !session) throw new Error('Keine bestätigte Sitzung vorhanden.')
+    const attributes = { password }
+    if (currentPassword) attributes.current_password = currentPassword
+    const { data, error } = await client.auth.updateUser(attributes)
+    if (error) throw error
+    setPasswordRecovery(false)
+    removeRecoveryMarker()
+    if (data?.user) setUser(data.user)
+    return data
+  }
+
+  const updateEmail = async (email) => {
+    const client = clientRef.current
+    if (!client || !user) throw new Error('Du bist nicht angemeldet.')
+    const { data, error } = await client.auth.updateUser({ email: email.trim() })
+    if (error) throw error
+    if (data?.user) setUser(data.user)
+    return data
+  }
+
   const signOut = async () => {
     const client = clientRef.current
     const currentUserId = user?.id || activeUserIdRef.current
@@ -231,6 +357,7 @@ export function AuthProvider({ children }) {
     setSession(null)
     setUser(null)
     setProfile(null)
+    setPasswordRecovery(false)
     setSyncStatus({ status: 'idle' })
   }
 
@@ -240,6 +367,55 @@ export function AuthProvider({ children }) {
     const saved = await updateCloudProfile(client, user, nextProfile)
     setProfile(saved)
     return saved
+  }
+
+  const exportData = async () => {
+    const client = clientRef.current
+    if (!client || !user) throw new Error('Du bist nicht angemeldet.')
+    return exportAccountData(client, user, profile)
+  }
+
+  const removeCloudTraining = async () => {
+    const client = clientRef.current
+    if (!client || !user || !profile) throw new Error('Du bist nicht angemeldet.')
+    const pausedProfile = await updateCloudProfile(client, user, { ...profile, syncEnabled: false })
+    setProfile(pausedProfile)
+    const result = await deleteCloudTrainingData(client, user)
+    setSyncStatus({ status: 'disabled', lastSyncAt: null, uploaded: 0, downloaded: 0, cloudTotal: 0 })
+    return result
+  }
+
+  const removeLocalTraining = () => {
+    if (!user) throw new Error('Du bist nicht angemeldet.')
+    clearLocalTrainingData(user.id)
+    fingerprintRef.current = getTrainingFingerprint()
+  }
+
+  const deleteAccount = async ({ email, confirmation }) => {
+    const client = clientRef.current
+    const currentUserId = user?.id
+    if (!client || !user || !currentUserId) throw new Error('Du bist nicht angemeldet.')
+
+    const { data, error } = await client.functions.invoke('delete-speechcoach-account', {
+      body: { email: email.trim(), confirmation },
+    })
+    if (error) throw error
+    if (!data?.deleted) throw new Error(data?.error || 'Konto konnte nicht gelöscht werden.')
+
+    purgeLocalAccountData(currentUserId)
+    try {
+      await client.auth.signOut({ scope: 'local' })
+    } catch {
+      // The account no longer exists; local state is cleared below regardless.
+    }
+
+    activeUserIdRef.current = null
+    setSession(null)
+    setUser(null)
+    setProfile(null)
+    setPasswordRecovery(false)
+    setSyncStatus({ status: 'idle' })
+    return data
   }
 
   const value = {
@@ -252,11 +428,23 @@ export function AuthProvider({ children }) {
     authError,
     syncStatus,
     signedIn: Boolean(user),
+    passwordRecovery,
     signUp,
     signIn,
     sendMagicLink,
+    requestPasswordReset,
+    updatePassword,
+    updateEmail,
     signOut,
     saveProfile,
+    exportData,
+    removeCloudTraining,
+    removeLocalTraining,
+    deleteAccount,
+    cancelPasswordRecovery: () => {
+      setPasswordRecovery(false)
+      removeRecoveryMarker()
+    },
     syncNow: () => runSync({ silent: false }),
   }
 
