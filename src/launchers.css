@@ -1,0 +1,13 @@
+.feature-launchers .coach-launcher {
+  position: static;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+}
+
+@media (max-width: 680px) {
+  .feature-launchers .coach-launcher,
+  .feature-launchers .progress-launcher {
+    min-height: 58px;
+  }
+}
