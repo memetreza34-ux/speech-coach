@@ -104,7 +104,7 @@ Das Schema verwendet ausschließlich die Tabellen:
 
 Dadurch kann SpeechCoach konfliktfrei mit anderen Apps im selben Projekt koexistieren. Beide Tabellen haben aktivierte Row Level Security. Authentifizierte Nutzer dürfen nur Zeilen lesen und verändern, deren `user_id` ihrer eigenen `auth.uid()` entspricht. Der anonyme Datenbankzugriff ist vollständig entzogen.
 
-Der Browser-Client lädt die exakt angegebene Version `@supabase/supabase-js@2.110.9` über den von Supabase dokumentierten CDN-Installationsweg. Die Projektwerte können über `.env` ersetzt werden.
+Der Browser-Client lädt die exakt angegebene Version `@supabase/supabase-js@2.111.0` über den von Supabase dokumentierten CDN-Installationsweg. Die Projektwerte können über `.env` ersetzt werden.
 
 ### Auth-Konfiguration
 
