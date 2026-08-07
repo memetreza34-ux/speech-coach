@@ -37,18 +37,35 @@ create table if not exists public.speechcoach_sessions (
   unique (user_id, client_id)
 );
 
+create table if not exists public.speechcoach_training_plans (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  plan_payload jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(plan_payload) = 'object'),
+  completed_task_ids jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(completed_task_ids) = 'array'),
+  plan_version integer not null default 1
+    check (plan_version between 1 and 1000),
+  started_on date not null default current_date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists speechcoach_sessions_user_created_idx
   on public.speechcoach_sessions (user_id, started_at desc);
 
 alter table public.speechcoach_profiles enable row level security;
 alter table public.speechcoach_sessions enable row level security;
+alter table public.speechcoach_training_plans enable row level security;
 
 revoke all on public.speechcoach_profiles from anon, authenticated;
 revoke all on public.speechcoach_sessions from anon, authenticated;
+revoke all on public.speechcoach_training_plans from anon, authenticated;
 grant select, insert, update, delete on public.speechcoach_profiles to authenticated;
 grant select, insert, update, delete on public.speechcoach_sessions to authenticated;
+grant select, insert, update, delete on public.speechcoach_training_plans to authenticated;
 grant all on public.speechcoach_profiles to service_role;
 grant all on public.speechcoach_sessions to service_role;
+grant all on public.speechcoach_training_plans to service_role;
 
 drop policy if exists "speechcoach profiles select own" on public.speechcoach_profiles;
 create policy "speechcoach profiles select own"
@@ -97,5 +114,30 @@ create policy "speechcoach sessions update own"
 drop policy if exists "speechcoach sessions delete own" on public.speechcoach_sessions;
 create policy "speechcoach sessions delete own"
   on public.speechcoach_sessions for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "speechcoach plans select own" on public.speechcoach_training_plans;
+create policy "speechcoach plans select own"
+  on public.speechcoach_training_plans for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "speechcoach plans insert own" on public.speechcoach_training_plans;
+create policy "speechcoach plans insert own"
+  on public.speechcoach_training_plans for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "speechcoach plans update own" on public.speechcoach_training_plans;
+create policy "speechcoach plans update own"
+  on public.speechcoach_training_plans for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "speechcoach plans delete own" on public.speechcoach_training_plans;
+create policy "speechcoach plans delete own"
+  on public.speechcoach_training_plans for delete
   to authenticated
   using ((select auth.uid()) = user_id);
