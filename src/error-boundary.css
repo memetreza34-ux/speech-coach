@@ -1,0 +1,101 @@
+.fatal-error-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: radial-gradient(circle at top, rgba(37, 99, 235, 0.18), transparent 38%), #060b16;
+  color: #f8fafc;
+}
+
+.fatal-error-card {
+  width: min(620px, 100%);
+  padding: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 24px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+}
+
+.fatal-error-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 17px;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.13);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+}
+
+.fatal-error-eyebrow {
+  margin-top: 20px;
+  color: #93c5fd;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fatal-error-card h1 {
+  margin: 9px 0 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1.7rem, 5vw, 2.5rem);
+  line-height: 1.05;
+}
+
+.fatal-error-card p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+
+.fatal-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.fatal-error-actions button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 13px;
+  color: #eff6ff;
+  background: rgba(37, 99, 235, 0.18);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fatal-error-actions button:last-child {
+  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.55);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.fatal-error-card details {
+  margin-top: 22px;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.fatal-error-card code {
+  display: block;
+  margin-top: 10px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+  border-radius: 10px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.22);
+}
+
+@media (max-width: 520px) {
+  .fatal-error-screen { padding: 14px; }
+  .fatal-error-card { padding: 24px 20px; border-radius: 19px; }
+  .fatal-error-actions { display: grid; }
+}
