@@ -57,6 +57,21 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - automatische Erkennung des schwächsten verfügbaren Bereichs
 - passende nächste Trainingsempfehlung mit direktem Einstieg
 
+### Adaptiver Vier-Wochen-Plan
+
+- automatische Auswertung aller sieben Kommunikationsfähigkeiten
+- stärkere Gewichtung der drei schwächsten gemessenen Bereiche
+- vier aufeinander aufbauende Phasen: Fundament, Kontrolle, Druck und Transfer
+- drei bis sieben Kerneinheiten pro Woche passend zum persönlichen Wochenziel
+- gemischte Solo-, Audio- und Live-Coach-Aufgaben
+- klare Tageszuordnung, Dauer, Schwierigkeitsstufe und Trainingsanweisung
+- manueller Aufgabenstatus für flexible Nachpflege
+- automatische Erledigung, wenn eine aus dem Plan gestartete passende Trainingseinheit abgeschlossen wird
+- Schutz vor falscher Zuordnung bei Kontowechseln und abgelaufenen Aufgabenstarts
+- Neuberechnung mit den aktuellsten Leistungswerten
+- lokale Nutzung ohne Konto
+- geräteübergreifende Cloud-Synchronisierung mit Completion-Merge bei Anmeldung
+
 ### Konto, Sicherheit und Datenschutz
 
 - SpeechCoach bleibt vollständig ohne Konto nutzbar
@@ -68,10 +83,10 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - dauerhaft gespeicherte und automatisch erneuerte Sitzung
 - persönliche Einstellungen für Anzeigename und Wochenziel
 - automatische und manuelle Cloud-Synchronisierung
-- geräteübergreifender Verlauf für Solo, Audio-Kennzahlen und Live-Coach
+- geräteübergreifender Verlauf für Solo, Audio-Kennzahlen, Live-Coach und Trainingsplan
 - optionales Speichern von Transkripten; standardmäßig deaktiviert
-- vollständiger JSON-Datenexport für Profil, lokale Trainings und Cloud-Datensätze
-- getrenntes Löschen von Cloud-Verlauf und lokalem Browser-Verlauf
+- vollständiger JSON-Datenexport für Profil, lokale Trainings, Cloud-Datensätze und Trainingsplan
+- getrenntes Löschen von Cloud-Verlauf und lokalem Browser-Verlauf einschließlich zugehörigem Plan
 - Synchronisierung wird bei Löschvorgängen automatisch pausiert, damit gelöschte Daten nicht sofort erneut geladen oder hochgeladen werden
 - endgültige Kontolöschung über eine authentifizierte Supabase Edge Function
 - Audiodateien werden niemals in den Cloud-Verlauf hochgeladen
@@ -103,12 +118,15 @@ Die Datenbankstruktur liegt idempotent unter:
 supabase/speechcoach-cloud.sql
 ```
 
-Das Schema verwendet ausschließlich die Tabellen:
+Das Schema verwendet ausschließlich die SpeechCoach-Tabellen:
 
 - `public.speechcoach_profiles`
 - `public.speechcoach_sessions`
+- `public.speechcoach_training_plans`
 
-Dadurch kann SpeechCoach konfliktfrei mit anderen Apps im selben Projekt koexistieren. Beide Tabellen haben aktivierte Row Level Security. Authentifizierte Nutzer dürfen nur Zeilen lesen und verändern, deren `user_id` ihrer eigenen `auth.uid()` entspricht. Der anonyme Datenbankzugriff ist vollständig entzogen.
+Dadurch kann SpeechCoach konfliktfrei mit anderen Apps im selben Projekt koexistieren. Alle drei Tabellen haben aktivierte Row Level Security. Authentifizierte Nutzer dürfen nur Zeilen lesen und verändern, deren `user_id` ihrer eigenen `auth.uid()` entspricht. Der anonyme Datenbankzugriff ist vollständig entzogen.
+
+Der Trainingsplan verwendet genau eine Cloud-Zeile pro Nutzer. Planstruktur und erledigte Aufgaben werden getrennt gespeichert und beim Gerätewechsel konfliktarm zusammengeführt. Abgeschlossene Aufgaben desselben Plans werden als Vereinigungsmenge gemergt, sodass ein Gerät den Fortschritt eines anderen Geräts nicht versehentlich zurücksetzt.
 
 Der Browser-Client lädt die exakt angegebene Version `@supabase/supabase-js@2.111.0` über einen gepinnten CDN-ESM-Import. Die Projektwerte können über `.env` ersetzt werden.
 
@@ -129,7 +147,7 @@ Die Funktion liegt unter:
 supabase/functions/delete-speechcoach-account/
 ```
 
-Sie ist im verbundenen Projekt als `delete-speechcoach-account` aktiv und verlangt einen gültigen Benutzer-JWT. Die Funktion prüft zusätzlich die Konto-E-Mail und den exakten Bestätigungstext `KONTO LÖSCHEN`. Erst danach verwendet sie den serverseitigen Service-Role-Kontext, um den Auth-Nutzer endgültig zu löschen. Durch die Foreign Keys mit `ON DELETE CASCADE` werden Profil und Cloud-Trainings automatisch entfernt.
+Sie ist im verbundenen Projekt als `delete-speechcoach-account` aktiv und verlangt einen gültigen Benutzer-JWT. Die Funktion prüft zusätzlich die Konto-E-Mail und den exakten Bestätigungstext `KONTO LÖSCHEN`. Erst danach verwendet sie den serverseitigen Service-Role-Kontext, um den Auth-Nutzer endgültig zu löschen. Durch die Foreign Keys mit `ON DELETE CASCADE` werden Profil, Cloud-Trainings und Cloud-Trainingsplan automatisch entfernt.
 
 Der Service-Role-Key ist ausschließlich in der Supabase-Laufzeit verfügbar und wird niemals an den Browser übertragen.
 
@@ -164,11 +182,12 @@ Die Audioaufnahme des Audio-Labors bleibt im Browser und wird nur für die aktue
 
 Transkripte werden erst dann in neue Cloud-Sitzungen aufgenommen, wenn der Nutzer die entsprechende Kontooption ausdrücklich aktiviert. Bereits ohne Transkript synchronisierte Sitzungen werden nicht nachträglich verändert.
 
-Der JSON-Export kann Kontometadaten, Profilwerte, lokale Trainings und Cloud-Zeilen enthalten. Temporäre Audiodateien sind nicht Bestandteil des Exports, da sie nicht dauerhaft gespeichert werden.
+Der JSON-Export kann Kontometadaten, Profilwerte, lokale Trainings, Cloud-Zeilen sowie die lokale und synchronisierte Planfassung enthalten. Temporäre Audiodateien sind nicht Bestandteil des Exports, da sie nicht dauerhaft gespeichert werden.
+
+Die automatische Planerledigung erkennt eine nach dem Aufgabenstart gespeicherte Trainingseinheit des passenden Modus. Ein nicht abgeschlossenes Training bleibt offen; ein Aufgabenstart verfällt spätestens nach zwölf Stunden.
 
 Die optionale Live-Transkription hängt von der Web Speech Recognition API des Browsers ab. Für spätere Ausbaustufen sind zusätzlich vorgesehen:
 
 - zuverlässiger serverseitiger Speech-to-Text-Dienst mit Zeitstempeln
 - Tonhöhen- und Intonationsanalyse
-- adaptive mehrwöchige Trainingspläne
 - mehrpersonige Simulationen
