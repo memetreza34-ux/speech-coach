@@ -201,9 +201,11 @@ SPEECHCOACH_ALLOWED_ORIGINS=https://speechcoach.example
 
 Der API-Schlüssel darf niemals als `VITE_OPENAI_API_KEY` oder anderweitig im Frontend gespeichert werden. Die Coach-Endpunkte senden Anfragen mit `store: false` und erzwingen strukturierte JSON-Ausgaben. Beim Team-Coach akzeptiert der Server nur bekannte Szenario-IDs und verwendet die Rollenbeschreibungen aus seiner eigenen festen Szenariokonfiguration statt aus Browserdaten.
 
-### API-Missbrauchsschutz
+### API-Missbrauchsschutz und Diagnostik
 
 `api/_security.js` schützt `/api/coach`, `/api/team-coach` und `/api/transcribe` zentral mit Methodenprüfung, Same-Origin-/Allowlist-Prüfung, Body-Limits, No-Store-Headern, Request-IDs und einem best-effort per-Instance-Rate-Limit. Die Transkription besitzt dabei bewusst das strengste Limit.
+
+Jede geschützte Anfrage erhält eine `X-Request-Id`. Coach-Fallbacks behalten nur technische Diagnosefelder wie Fehlerart, Request-ID und optional `Retry-After`; Gesprächsinhalte werden dafür nicht zusätzlich gespeichert. Bei einer fehlgeschlagenen Präzisionstranskription kann die gekürzte Referenz-ID im Fehlerhinweis erscheinen.
 
 Ein serverloser In-Memory-Limiter ist **keine global verteilte Rate-Limit-Garantie**. Vor einem öffentlichen Release muss deshalb zusätzlich ein globales WAF- beziehungsweise Distributed-Rate-Limit auf der Hosting-Plattform aktiviert und getestet werden. Die vollständige Betriebsanleitung und vorgeschlagenen Startwerte stehen unter:
 
