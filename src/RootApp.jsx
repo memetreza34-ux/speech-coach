@@ -12,16 +12,19 @@ import {
   MessageCircleMore,
   Sparkles,
   UserRound,
+  Users,
 } from 'lucide-react'
 import App from './App.jsx'
 import AccountCenter from './AccountCenter.jsx'
 import AudioStudio from './AudioStudio.jsx'
 import ConversationCoach from './ConversationCoach.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
+import TeamCoach from './TeamCoach.jsx'
 import TrainingPlanCenter from './TrainingPlanCenter.jsx'
 import TrainingPlanCompletionBridge from './TrainingPlanCompletionBridge.jsx'
 import { AuthProvider, useAuth } from './cloud/AuthContext.jsx'
 import './conversation.css'
+import './team-coach.css'
 import './progress.css'
 import './audio-lab.css'
 import './account.css'
@@ -35,6 +38,7 @@ function SpeechCoachExperience() {
   const appVisible = activeView === null
 
   const openCoach = () => setActiveView('coach')
+  const openTeamCoach = () => setActiveView('team-coach')
   const openProgress = () => setActiveView('progress')
   const openPlan = () => setActiveView('plan')
   const openAudio = () => setActiveView('audio')
@@ -88,6 +92,12 @@ function SpeechCoachExperience() {
               <ArrowUpRight size={18} />
             </motion.button>
 
+            <motion.button className="team-launcher" onClick={openTeamCoach} whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }}>
+              <span className="team-launcher-icon"><Users size={22} /></span>
+              <span className="team-launcher-copy"><small><Sparkles size={12} /> Mehrpersonen</small><strong>Team-Coach</strong><em>Mehrere Rollen gleichzeitig</em></span>
+              <MessageCircleMore size={20} />
+            </motion.button>
+
             <motion.button className="coach-launcher" onClick={openCoach} whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }}>
               <span className="coach-launcher-icon"><Bot size={22} /></span>
               <span className="coach-launcher-copy"><small><Sparkles size={12} /> Interaktiv</small><strong>Live-Coach</strong><em>Gespräch mit Rückfragen</em></span>
@@ -109,6 +119,7 @@ function SpeechCoachExperience() {
           />
         )}
         {activeView === 'coach' && <ConversationCoach key="live-coach" onClose={closeOverlay} />}
+        {activeView === 'team-coach' && <TeamCoach key="team-coach" onClose={closeOverlay} />}
         {activeView === 'audio' && <AudioStudio key="audio-studio" onClose={closeOverlay} />}
         {activeView === 'progress' && (
           <ProgressDashboard
