@@ -10,7 +10,6 @@ import {
   CircleStop,
   Gauge,
   LoaderCircle,
-  MessageCircleMore,
   Mic,
   RefreshCw,
   Send,
@@ -329,6 +328,7 @@ function SummaryView({ configuration, result, onRestart, onNewSimulation, onClos
         difficulty: configuration.difficulty.title,
         rounds: configuration.totalRounds,
         scores: {
+          overall: scores.overall,
           clarity: scores.clarity,
           structure: scores.structure,
           impact: scores.impact,
@@ -370,7 +370,7 @@ function SummaryView({ configuration, result, onRestart, onNewSimulation, onClos
 
         <section className="team-round-review">
           <div><Gauge size={20} /><h2>Antworten im Verlauf</h2></div>
-          <div>{result.assessments.map((assessment) => <article key={assessment.round}><span>{assessment.round}</span><p><strong>Antwort an {assessment.speakerName}</strong><em>{assessment.answer}</em><small>{assessment.microFeedback}</small></p><b>{Math.round((assessment.scores.clarity + assessment.scores.structure + assessment.scores.impact + assessment.scores.audienceManagement) / 4)}</b></article>)}</div>
+          <div>{result.assessments.map((assessment) => <article key={assessment.round}><span>{assessment.round}</span><p><strong>Reaktion von {assessment.speakerName}</strong><em>{assessment.answer}</em><small>{assessment.microFeedback}</small></p><b>{Math.round((assessment.scores.clarity + assessment.scores.structure + assessment.scores.impact + assessment.scores.audienceManagement) / 4)}</b></article>)}</div>
         </section>
 
         <div className="team-summary-actions"><button onClick={onRestart}><RefreshCw size={18} /> Gleiche Runde wiederholen</button><button onClick={onNewSimulation}><ArrowLeft size={18} /> Neue Simulation</button></div>
