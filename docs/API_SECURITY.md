@@ -87,6 +87,8 @@ Nicht protokollieren:
 - Supabase-Tokens
 - OpenAI-Schlüssel
 
+Die Browser-Fallbacks von Live-Coach und Team-Coach behalten nur technische Diagnosefelder der aktuellen Antwort (`fallbackReason`, `requestId`, optional `retryAfterSeconds`). Präzisionstranskriptionsfehler zeigen eine gekürzte Referenz-ID. Diese Diagnostik enthält keine Gesprächs- oder Audiodaten.
+
 ## Payload-Grenzen
 
 Neben den Guard-Limits bleiben die fachlichen Grenzen aktiv:
