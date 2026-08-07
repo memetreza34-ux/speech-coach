@@ -19,10 +19,12 @@ const requiredFiles = [
   'src/TeamCoach.jsx',
   'src/TrainingPlanCenter.jsx',
   'src/ErrorBoundary.jsx',
+  'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
   'supabase/speechcoach-cloud.sql',
+  'vercel.json',
 ]
 
 for (const file of requiredFiles) {
@@ -55,11 +57,23 @@ expect(transcribe.includes("response.setHeader('Cache-Control', 'no-store')"), '
 expect(transcribe.includes("form.append('model', 'whisper-1')"), 'timestamp transcription model changed unexpectedly')
 expect(transcribe.includes("form.append('timestamp_granularities[]', 'word')"), 'word timestamps are not requested')
 
+const health = read('api/health.js')
+expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
+expect(health.includes("response.setHeader('Cache-Control', 'no-store, max-age=0')"), 'health endpoint must disable caching')
+
+const deployment = JSON.parse(read('vercel.json'))
+const globalHeaders = deployment.headers?.find((entry) => entry.source === '/(.*)')?.headers || []
+const headerKeys = new Set(globalHeaders.map((header) => header.key))
+for (const requiredHeader of ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Permissions-Policy', 'Strict-Transport-Security']) {
+  expect(headerKeys.has(requiredHeader), `missing production response header: ${requiredHeader}`)
+}
+
 const sourceFiles = [
   'src/RootApp.jsx',
   'src/AudioStudioPro.jsx',
   'src/cloud/cloudSync.js',
   'src/cloud/supabaseClient.js',
+  'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
@@ -67,10 +81,11 @@ const sourceFiles = [
 for (const file of sourceFiles) {
   const content = read(file)
   expect(!/VITE_OPENAI_API_KEY/.test(content), `${file} contains forbidden browser OpenAI key reference`)
-  expect(!/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/.test(content), `${file} appears to contain an OpenAI secret`) 
+  expect(!/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/.test(content), `${file} appears to contain an OpenAI secret`)
 }
 
 const syntaxFiles = [
+  'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
