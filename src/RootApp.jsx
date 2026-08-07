@@ -5,6 +5,7 @@ import {
   AudioLines,
   BarChart3,
   Bot,
+  CalendarRange,
   Cloud,
   CloudOff,
   LoaderCircle,
@@ -17,12 +18,15 @@ import AccountCenter from './AccountCenter.jsx'
 import AudioStudio from './AudioStudio.jsx'
 import ConversationCoach from './ConversationCoach.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
+import TrainingPlanCenter from './TrainingPlanCenter.jsx'
+import TrainingPlanCompletionBridge from './TrainingPlanCompletionBridge.jsx'
 import { AuthProvider, useAuth } from './cloud/AuthContext.jsx'
 import './conversation.css'
 import './progress.css'
 import './audio-lab.css'
 import './account.css'
 import './account-security.css'
+import './training-plan.css'
 import './launchers.css'
 
 function SpeechCoachExperience() {
@@ -32,6 +36,7 @@ function SpeechCoachExperience() {
 
   const openCoach = () => setActiveView('coach')
   const openProgress = () => setActiveView('progress')
+  const openPlan = () => setActiveView('plan')
   const openAudio = () => setActiveView('audio')
   const openAccount = () => setActiveView('account')
   const closeOverlay = () => setActiveView(null)
@@ -44,6 +49,7 @@ function SpeechCoachExperience() {
 
   return (
     <>
+      <TrainingPlanCompletionBridge />
       {appVisible && <App />}
 
       <AnimatePresence>
@@ -62,6 +68,12 @@ function SpeechCoachExperience() {
                 <small>{signedIn ? (syncStatus?.status === 'syncing' ? 'Synchronisierung läuft' : 'Fortschritt wird gesichert') : 'Optional geräteübergreifend'}</small>
               </span>
               <AccountStatusIcon className={syncStatus?.status === 'syncing' ? 'launcher-spin' : ''} size={18} />
+            </motion.button>
+
+            <motion.button className="plan-launcher" onClick={openPlan} whileHover={{ y: -3 }} whileTap={{ scale: 0.98 }}>
+              <span className="plan-launcher-icon"><CalendarRange size={21} /></span>
+              <span className="plan-launcher-copy"><strong>4-Wochen-Plan</strong><small>Adaptiv und täglich geführt</small></span>
+              <ArrowUpRight size={18} />
             </motion.button>
 
             <motion.button className="progress-launcher" onClick={openProgress} whileHover={{ y: -3 }} whileTap={{ scale: 0.98 }}>
@@ -87,12 +99,22 @@ function SpeechCoachExperience() {
 
       <AnimatePresence>
         {activeView === 'account' && <AccountCenter key="account-center" onClose={closeOverlay} />}
+        {activeView === 'plan' && (
+          <TrainingPlanCenter
+            key="training-plan"
+            onClose={closeOverlay}
+            onOpenCoach={openCoach}
+            onOpenAudio={openAudio}
+            onOpenSolo={closeOverlay}
+          />
+        )}
         {activeView === 'coach' && <ConversationCoach key="live-coach" onClose={closeOverlay} />}
         {activeView === 'audio' && <AudioStudio key="audio-studio" onClose={closeOverlay} />}
         {activeView === 'progress' && (
           <ProgressDashboard
             key="progress-dashboard"
             onClose={closeOverlay}
+            onOpenPlan={openPlan}
             onOpenCoach={openCoach}
             onOpenAudio={openAudio}
             onOpenSolo={closeOverlay}
