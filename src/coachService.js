@@ -58,6 +58,13 @@ const buildOfflineCoachTurn = ({ mode, difficulty, round, totalRounds, conversat
   }
 }
 
+const offlineWithDiagnostics = (payload, diagnostics = {}) => ({
+  ...buildOfflineCoachTurn(payload),
+  fallbackReason: diagnostics.fallbackReason || 'network',
+  requestId: diagnostics.requestId || null,
+  retryAfterSeconds: diagnostics.retryAfterSeconds || null,
+})
+
 export const requestCoachTurn = async (payload) => {
   try {
     const response = await fetch('/api/coach', {
@@ -78,12 +85,19 @@ export const requestCoachTurn = async (payload) => {
       }),
     })
 
-    if (!response.ok) throw new Error(`Coach API returned ${response.status}`)
-    const result = await response.json()
+    const result = await response.json().catch(() => ({}))
+    const requestId = response.headers.get('x-request-id') || result?.requestId || null
+    if (!response.ok) {
+      return offlineWithDiagnostics(payload, {
+        fallbackReason: response.status === 429 ? 'rate-limited' : 'server-error',
+        requestId,
+        retryAfterSeconds: Number(response.headers.get('retry-after')) || null,
+      })
+    }
 
-    if (!result?.reply || !result?.scores) throw new Error('Invalid coach response')
-    return { ...result, source: 'ai' }
+    if (!result?.reply || !result?.scores) return offlineWithDiagnostics(payload, { fallbackReason: 'invalid-response', requestId })
+    return { ...result, source: 'ai', requestId }
   } catch {
-    return buildOfflineCoachTurn(payload)
+    return offlineWithDiagnostics(payload, { fallbackReason: 'network' })
   }
 }
