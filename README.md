@@ -73,7 +73,7 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Fähigkeitenprofil für Tempo, Füllwortkontrolle, Klarheit, Struktur, Wirkung, Stimm-Dynamik und Pausengestaltung
 - Aktivitätsübersicht für die letzten sieben Tage
 - filterbarer Verlauf für Solo-, Audio- und Dialogtrainings
-- Team-Coach fließt als Dialogtraining in Klarheit, Struktur und Wirkung ein
+- Team-Coach fließt als Dialogtraining in Klarheit, Struktur und Wirkung ein; der exakte Team-Gesamtscore inklusive Gruppenführung bleibt zusätzlich in der Sitzung gespeichert
 - automatische Erkennung des schwächsten verfügbaren Bereichs
 - passende nächste Trainingsempfehlung mit direktem Einstieg
 
