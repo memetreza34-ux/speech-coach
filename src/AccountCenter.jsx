@@ -459,7 +459,7 @@ function SignedInAccount() {
               <div><strong>{localCounts.dialog}</strong><span>Dialoge</span></div>
               <div><strong>{localCounts.audio}</strong><span>Audioanalysen</span></div>
             </div>
-            <label className="account-toggle-row"><div><strong>Transkripte in neuen Cloud-Sitzungen speichern</strong><span>Standardmäßig bleiben Transkripte lokal. Audiodateien werden grundsätzlich nie hochgeladen.</span></div><input type="checkbox" checked={form.storeTranscripts} onChange={(event) => setForm((current) => ({ ...current, storeTranscripts: event.target.checked }))} /></label>
+            <label className="account-toggle-row"><div><strong>Transkripte in neuen Cloud-Sitzungen speichern</strong><span>Standardmäßig bleiben Transkripte lokal. Audiodateien werden nicht im Cloud-Verlauf gespeichert; nur bei ausdrücklich aktivierter Präzisionstranskription wird die aktuelle Aufnahme einmalig an den konfigurierten Server/API-Anbieter übertragen.</span></div><input type="checkbox" checked={form.storeTranscripts} onChange={(event) => setForm((current) => ({ ...current, storeTranscripts: event.target.checked }))} /></label>
             <button className="account-secondary-button account-panel-button" onClick={save} disabled={Boolean(busy)}>{busy === 'save' ? <LoaderCircle className="spin" size={18} /> : <Save size={18} />} Datenschutzoption speichern</button>
           </section>
 
