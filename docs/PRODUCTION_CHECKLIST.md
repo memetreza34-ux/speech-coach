@@ -26,12 +26,32 @@ Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 - `OPENAI_API_KEY` ausschließlich serverseitig konfigurieren
 - optional `OPENAI_MODEL` serverseitig setzen
 - keine `VITE_OPENAI_API_KEY` anlegen
+- `SPEECHCOACH_ALLOWED_ORIGINS` nur setzen, wenn zusätzliche Frontend-Origins absichtlich erlaubt werden sollen
 - Vercel muss `vercel.json` übernehmen
 - `/api/health` muss HTTP 200 liefern
 - `/api/coach`, `/api/team-coach` und `/api/transcribe` dürfen auf GET nicht erfolgreich antworten
 - Security-Header im Browser-Netzwerk-Tab prüfen
 - statische `/assets/*` müssen langfristig gecacht werden
 - `/api/*` darf nicht gecacht werden
+
+### API-Missbrauchsschutz
+
+Die vollständige Betriebsdokumentation liegt unter `docs/API_SECURITY.md`.
+
+Vor öffentlicher Freigabe zusätzlich prüfen:
+
+- gemeinsamer Guard `api/_security.js` ist in Coach, Team-Coach und Transkription aktiv
+- fremder Browser-Origin wird mit HTTP 403 abgelehnt
+- übergroßer Body wird mit HTTP 413 abgelehnt
+- explizit falscher Content-Type wird mit HTTP 415 abgelehnt
+- überschrittenes In-Code-Limit liefert HTTP 429 und `Retry-After`
+- Fehlerantworten enthalten dieselbe Request-ID wie `X-Request-Id`
+- auf Vercel WAF beziehungsweise einer gleichwertigen verteilten Schutzschicht globale Rate-Limits für die kostenpflichtigen AI-Endpunkte einrichten
+- WAF-Regeln müssen tatsächlich limitieren/deny/challenge und nicht nur protokollieren
+- Serverlogs dürfen keine Gesprächsinhalte, Transkripte, Audiodaten oder Secrets enthalten
+- OpenAI-Nutzung/Kosten auf ungewöhnliche Spitzen überwachen
+
+Der In-Code-Limiter arbeitet pro Serverprozess und ersetzt ausdrücklich kein globales WAF-/Distributed-Rate-Limit.
 
 ## 3. Supabase Auth
 
@@ -134,6 +154,7 @@ Mit WebM und – falls vom Zielbrowser erzeugt – MP4/M4A prüfen:
 - Wort-Zeitmarken werden angezeigt
 - Klick auf Textgruppe springt an passende Audiostelle
 - Fehler der Servertranskription zerstört lokale Analyse nicht
+- 429 zeigt einen kontrollierten Hinweis und eine Referenz-ID
 - >3-MB-Aufnahme wird kontrolliert abgelehnt
 - Audiodatei erscheint nicht im Local Storage
 - Audiodatei erscheint nicht in Supabase
@@ -192,6 +213,8 @@ Gezielt testen:
 - Offline-Modus
 - Supabase nicht erreichbar
 - OpenAI nicht erreichbar
+- API-Rate-Limit erreicht
+- fremder API-Origin
 - Mikrofon verweigert
 - Browser ohne Speech Recognition
 - Browser ohne MediaRecorder
@@ -227,3 +250,4 @@ Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 6. Cloud-Sync auf zwei Geräten geprüft ist.
 7. Konto- und Datenlöschung mit einem Wegwerf-Testkonto geprüft ist.
 8. kritische Mobile- und Desktop-Flows manuell geprüft sind.
+9. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
