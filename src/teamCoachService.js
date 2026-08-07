@@ -20,11 +20,11 @@ const buildOfflineTeamTurn = ({ scenario, difficulty, round, totalRounds, conver
 
   const participant = scenario.participants[(round - 1) % scenario.participants.length]
   const nextQuestions = [
-    `Was ist aus deiner Sicht der wichtigste konkrete nächste Schritt und wer übernimmt ihn?`,
-    `Ich sehe dabei noch ein Risiko. Wie würdest du meinen Einwand berücksichtigen, ohne dein Ziel aufzugeben?`,
-    `Welche messbare oder überprüfbare Wirkung erwartest du von deinem Vorschlag?`,
-    `Was würdest du tun, wenn die Gruppe deinem bevorzugten Weg nicht vollständig zustimmt?`,
-    `Fasse deine Entscheidung und Begründung jetzt so zusammen, dass alle Beteiligten wissen, was als Nächstes passiert.`,
+    'Was ist aus deiner Sicht der wichtigste konkrete nächste Schritt und wer übernimmt ihn?',
+    'Ich sehe dabei noch ein Risiko. Wie würdest du meinen Einwand berücksichtigen, ohne dein Ziel aufzugeben?',
+    'Welche messbare oder überprüfbare Wirkung erwartest du von deinem Vorschlag?',
+    'Was würdest du tun, wenn die Gruppe deinem bevorzugten Weg nicht vollständig zustimmt?',
+    'Fasse deine Entscheidung und Begründung jetzt so zusammen, dass alle Beteiligten wissen, was als Nächstes passiert.',
   ]
 
   const feedback = !acknowledgesOthers
@@ -72,6 +72,13 @@ const buildOfflineTeamTurn = ({ scenario, difficulty, round, totalRounds, conver
   }
 }
 
+const offlineWithDiagnostics = (payload, diagnostics = {}) => ({
+  ...buildOfflineTeamTurn(payload),
+  fallbackReason: diagnostics.fallbackReason || 'network',
+  requestId: diagnostics.requestId || null,
+  retryAfterSeconds: diagnostics.retryAfterSeconds || null,
+})
+
 export const requestTeamCoachTurn = async (payload) => {
   try {
     const response = await fetch('/api/team-coach', {
@@ -95,11 +102,19 @@ export const requestTeamCoachTurn = async (payload) => {
       }),
     })
 
-    if (!response.ok) throw new Error(`Team coach API returned ${response.status}`)
-    const result = await response.json()
-    if (!result?.reply || !result?.scores || !result?.speakerId) throw new Error('Invalid team coach response')
-    return { ...result, source: 'ai' }
+    const result = await response.json().catch(() => ({}))
+    const requestId = response.headers.get('x-request-id') || result?.requestId || null
+    if (!response.ok) {
+      return offlineWithDiagnostics(payload, {
+        fallbackReason: response.status === 429 ? 'rate-limited' : 'server-error',
+        requestId,
+        retryAfterSeconds: Number(response.headers.get('retry-after')) || null,
+      })
+    }
+
+    if (!result?.reply || !result?.scores || !result?.speakerId) return offlineWithDiagnostics(payload, { fallbackReason: 'invalid-response', requestId })
+    return { ...result, source: 'ai', requestId }
   } catch {
-    return buildOfflineTeamTurn(payload)
+    return offlineWithDiagnostics(payload, { fallbackReason: 'network' })
   }
 }
