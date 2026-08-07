@@ -1,3 +1,5 @@
+import { guardApiRequest } from './_security.js'
+
 const ALLOWED_MODE_IDS = new Set([
   'free-speaking',
   'argumentation',
@@ -111,24 +113,27 @@ Regeln:
 }
 
 export default async function handler(request, response) {
-  if (request.method !== 'POST') {
-    response.setHeader('Allow', 'POST')
-    return response.status(405).json({ error: 'Method not allowed' })
-  }
+  const guard = guardApiRequest(request, response, {
+    scope: 'coach',
+    maxBodyBytes: 32 * 1024,
+    rateLimit: 18,
+  })
+  if (!guard.ok) return
+  const { requestId } = guard
 
   if (!process.env.OPENAI_API_KEY) {
-    return response.status(503).json({ error: 'AI coach is not configured' })
+    return response.status(503).json({ error: 'AI coach is not configured', requestId })
   }
 
   let payload
   try {
     payload = parseBody(request.body)
   } catch {
-    return response.status(400).json({ error: 'Invalid JSON body' })
+    return response.status(400).json({ error: 'Invalid JSON body', requestId })
   }
 
   const validationError = validatePayload(payload)
-  if (validationError) return response.status(400).json({ error: validationError })
+  if (validationError) return response.status(400).json({ error: validationError, requestId })
 
   const compactConversation = payload.conversation.map((message) => ({
     role: message.role,
@@ -177,17 +182,17 @@ export default async function handler(request, response) {
 
     const apiData = await apiResponse.json()
     if (!apiResponse.ok) {
-      console.error('OpenAI API error', apiData?.error?.code || apiResponse.status)
-      return response.status(502).json({ error: 'Coach generation failed' })
+      console.error('OpenAI API error', requestId, apiData?.error?.code || apiResponse.status)
+      return response.status(502).json({ error: 'Coach generation failed', requestId })
     }
 
     const outputText = readOutputText(apiData)
-    if (!outputText) return response.status(502).json({ error: 'Empty coach response' })
+    if (!outputText) return response.status(502).json({ error: 'Empty coach response', requestId })
 
     const result = JSON.parse(outputText)
-    return response.status(200).json(result)
+    return response.status(200).json({ ...result, requestId })
   } catch (error) {
-    console.error('Coach endpoint failure', error instanceof Error ? error.message : 'Unknown error')
-    return response.status(500).json({ error: 'Internal coach error' })
+    console.error('Coach endpoint failure', requestId, error instanceof Error ? error.message : 'Unknown error')
+    return response.status(500).json({ error: 'Internal coach error', requestId })
   }
 }
