@@ -11,6 +11,32 @@ import {
 import { COACH_MODES, DIFFICULTIES } from '../src/coachScenarios.js'
 import { TEAM_SCENARIOS } from '../src/teamScenarios.js'
 import { groupTimestampWords } from '../src/serverTranscription.js'
+import healthHandler from '../api/health.js'
+import coachHandler from '../api/coach.js'
+import teamCoachHandler from '../api/team-coach.js'
+import transcribeHandler from '../api/transcribe.js'
+
+const createMockResponse = () => {
+  const state = { statusCode: 200, headers: {}, body: null, ended: false }
+  return {
+    state,
+    setHeader(key, value) {
+      state.headers[key] = value
+    },
+    status(code) {
+      state.statusCode = code
+      return this
+    },
+    json(body) {
+      state.body = body
+      state.ended = true
+      return body
+    },
+    end() {
+      state.ended = true
+    },
+  }
+}
 
 test('training plan always spans four weeks and clamps weekly sessions', () => {
   const lowGoal = generateTrainingPlan({ weeklyGoal: 1, previousPlanId: 'test-low' })
@@ -96,4 +122,42 @@ test('word timestamps are grouped into clickable transcript chunks', () => {
   assert.equal(groups[0].start, 0.1)
   assert.equal(groups[0].end, 1.8)
   assert.equal(groups[1].text, 'Weiter.')
+})
+
+test('health endpoint exposes readiness without secrets', () => {
+  const response = createMockResponse()
+  healthHandler({ method: 'GET' }, response)
+
+  assert.equal(response.state.statusCode, 200)
+  assert.equal(response.state.body.status, 'ok')
+  assert.equal(response.state.body.service, 'speechcoach')
+  assert.equal(typeof response.state.body.capabilities.aiCoachConfigured, 'boolean')
+  assert.equal(JSON.stringify(response.state.body).includes('OPENAI_API_KEY'), false)
+  assert.equal(response.state.headers['Cache-Control'], 'no-store, max-age=0')
+})
+
+test('serverless endpoints reject unsupported methods', async () => {
+  for (const handler of [coachHandler, teamCoachHandler, transcribeHandler]) {
+    const response = createMockResponse()
+    await handler({ method: 'GET' }, response)
+    assert.equal(response.state.statusCode, 405)
+    assert.match(String(response.state.headers.Allow), /POST/)
+  }
+})
+
+test('AI endpoints fail closed when the server key is missing', async () => {
+  const previousKey = process.env.OPENAI_API_KEY
+  delete process.env.OPENAI_API_KEY
+
+  try {
+    for (const handler of [coachHandler, teamCoachHandler, transcribeHandler]) {
+      const response = createMockResponse()
+      await handler({ method: 'POST', body: {} }, response)
+      assert.equal(response.state.statusCode, 503)
+      assert.equal(response.state.ended, true)
+    }
+  } finally {
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY
+    else process.env.OPENAI_API_KEY = previousKey
+  }
 })
