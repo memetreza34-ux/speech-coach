@@ -25,6 +25,25 @@ export const groupTimestampWords = (words, size = 7) => {
   return groups
 }
 
+const buildTranscriptionError = (response, result) => {
+  const requestId = response.headers.get('x-request-id') || result?.requestId || null
+  const retryAfterSeconds = Number(response.headers.get('retry-after')) || null
+  let message = result?.error || `Transkription fehlgeschlagen (${response.status}).`
+
+  if (response.status === 429) {
+    message = retryAfterSeconds
+      ? `Zu viele Präzisionsanfragen. Versuche es in etwa ${retryAfterSeconds} Sekunden erneut.`
+      : 'Zu viele Präzisionsanfragen. Versuche es gleich erneut.'
+  }
+  if (requestId) message += ` Referenz: ${requestId.slice(0, 8)}.`
+
+  const error = new Error(message)
+  error.status = response.status
+  error.requestId = requestId
+  error.retryAfterSeconds = retryAfterSeconds
+  return error
+}
+
 export const requestServerTranscription = async (blob, { topic = '', language = 'de' } = {}) => {
   if (!blob?.size) throw new Error('Keine Audiodatei verfügbar.')
   if (blob.size > MAX_UPLOAD_BYTES) {
@@ -44,7 +63,7 @@ export const requestServerTranscription = async (blob, { topic = '', language = 
   })
 
   const result = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(result?.error || `Transkription fehlgeschlagen (${response.status}).`)
+  if (!response.ok) throw buildTranscriptionError(response, result)
   if (!result?.text) throw new Error('Der Transkriptionsdienst hat keinen Text geliefert.')
 
   return {
@@ -54,5 +73,6 @@ export const requestServerTranscription = async (blob, { topic = '', language = 
     words: Array.isArray(result.words) ? result.words : [],
     timestampGroups: groupTimestampWords(result.words),
     model: result.model || 'whisper-1',
+    requestId: response.headers.get('x-request-id') || result.requestId || null,
   }
 }
