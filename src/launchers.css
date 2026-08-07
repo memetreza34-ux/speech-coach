@@ -1,4 +1,5 @@
 .feature-launchers .coach-launcher,
+.feature-launchers .team-launcher,
 .feature-launchers .audio-launcher,
 .feature-launchers .account-launcher,
 .feature-launchers .plan-launcher {
@@ -9,7 +10,8 @@
 }
 
 .account-launcher,
-.plan-launcher {
+.plan-launcher,
+.team-launcher {
   min-width: 220px;
   min-height: 58px;
   display: grid;
@@ -25,16 +27,13 @@
   cursor: pointer;
 }
 
-.account-launcher {
-  border: 1px solid rgba(56, 189, 248, 0.22);
-}
-
-.plan-launcher {
-  border: 1px solid rgba(167, 139, 250, 0.23);
-}
+.account-launcher { border: 1px solid rgba(56, 189, 248, 0.22); }
+.plan-launcher { border: 1px solid rgba(167, 139, 250, 0.23); }
+.team-launcher { border: 1px solid rgba(45, 212, 191, 0.24); }
 
 .account-launcher-icon,
-.plan-launcher-icon {
+.plan-launcher-icon,
+.team-launcher-icon {
   width: 42px;
   height: 42px;
   display: grid;
@@ -47,23 +46,28 @@
   background: linear-gradient(135deg, #0284c7, #6d28d9);
   box-shadow: 0 10px 25px rgba(37, 99, 235, 0.22);
 }
-
 .plan-launcher-icon {
   color: #ede9fe;
   background: linear-gradient(135deg, #7c3aed, #2563eb);
   box-shadow: 0 10px 25px rgba(109, 40, 217, 0.22);
 }
+.team-launcher-icon {
+  color: #ecfeff;
+  background: linear-gradient(135deg, #0891b2, #059669);
+  box-shadow: 0 10px 25px rgba(13, 148, 136, 0.22);
+}
 
 .account-launcher-copy,
-.plan-launcher-copy {
-  min-width: 0;
-  text-align: left;
-}
+.plan-launcher-copy,
+.team-launcher-copy { min-width: 0; text-align: left; }
 
 .account-launcher-copy strong,
 .account-launcher-copy small,
 .plan-launcher-copy strong,
-.plan-launcher-copy small {
+.plan-launcher-copy small,
+.team-launcher-copy strong,
+.team-launcher-copy small,
+.team-launcher-copy em {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -71,43 +75,34 @@
 }
 
 .account-launcher-copy strong,
-.plan-launcher-copy strong {
+.plan-launcher-copy strong,
+.team-launcher-copy strong {
   font-family: 'Outfit', sans-serif;
   font-size: 0.9rem;
 }
-
 .account-launcher-copy small,
-.plan-launcher-copy small {
+.plan-launcher-copy small,
+.team-launcher-copy small {
   margin-top: 2px;
   color: #94a3b8;
   font-size: 0.63rem;
 }
+.team-launcher-copy small { display: flex; align-items: center; gap: 4px; color: #5eead4; }
+.team-launcher-copy em { margin-top: 1px; color: #64748b; font-size: 0.6rem; font-style: normal; }
 
-.account-launcher > svg {
-  color: #7dd3fc;
-}
+.account-launcher > svg { color: #7dd3fc; }
+.plan-launcher > svg { color: #c4b5fd; }
+.team-launcher > svg { color: #5eead4; }
 
-.plan-launcher > svg {
-  color: #c4b5fd;
-}
-
-.launcher-spin {
-  animation: launcher-spin 0.9s linear infinite;
-}
-
-@keyframes launcher-spin {
-  to { transform: rotate(360deg); }
-}
+.launcher-spin { animation: launcher-spin 0.9s linear infinite; }
+@keyframes launcher-spin { to { transform: rotate(360deg); } }
 
 .progress-history-icon.audio {
   color: #a5f3fc;
   background: rgba(8, 145, 178, 0.13);
   border-color: rgba(34, 211, 238, 0.2);
 }
-
-.progress-filter-tabs {
-  flex-wrap: wrap;
-}
+.progress-filter-tabs { flex-wrap: wrap; }
 
 @media (max-width: 900px) {
   .feature-launchers {
@@ -115,8 +110,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
   }
-
   .feature-launchers .coach-launcher,
+  .feature-launchers .team-launcher,
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
@@ -128,11 +123,9 @@
 }
 
 @media (max-width: 680px) {
-  .feature-launchers {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+  .feature-launchers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feature-launchers .coach-launcher,
+  .feature-launchers .team-launcher,
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
@@ -140,57 +133,39 @@
     padding: 8px;
     grid-template-columns: auto minmax(0, 1fr);
   }
-
   .feature-launchers .audio-launcher-copy small,
   .feature-launchers .account-launcher-copy small,
   .feature-launchers .plan-launcher-copy small,
+  .feature-launchers .team-launcher-copy small,
+  .feature-launchers .team-launcher-copy em,
   .feature-launchers .audio-launcher > svg:last-child,
   .feature-launchers .account-launcher > svg:last-child,
-  .feature-launchers .plan-launcher > svg:last-child {
-    display: none;
-  }
-
-  .feature-launchers .coach-launcher:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .progress-filter-tabs button {
-    min-width: 68px;
-  }
+  .feature-launchers .plan-launcher > svg:last-child,
+  .feature-launchers .team-launcher > svg:last-child { display: none; }
+  .progress-filter-tabs button { min-width: 68px; }
 }
 
 @media (max-width: 480px) {
-  .feature-launchers {
-    grid-template-columns: repeat(5, 1fr);
-    gap: 7px;
-  }
-
+  .feature-launchers { grid-template-columns: repeat(6, 1fr); gap: 6px; }
   .feature-launchers .coach-launcher,
+  .feature-launchers .team-launcher,
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
   .feature-launchers .plan-launcher {
     display: flex;
     justify-content: center;
-    min-height: 54px;
-    border-radius: 15px;
+    min-height: 52px;
+    border-radius: 14px;
   }
-
-  .feature-launchers .coach-launcher:last-child {
-    grid-column: auto;
-  }
-
   .feature-launchers .coach-launcher-copy,
+  .feature-launchers .team-launcher-copy,
   .feature-launchers .progress-launcher-copy,
   .feature-launchers .audio-launcher-copy,
   .feature-launchers .account-launcher-copy,
-  .feature-launchers .plan-launcher-copy {
-    display: none;
-  }
+  .feature-launchers .plan-launcher-copy { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .launcher-spin {
-    animation-duration: 0.01ms;
-  }
+  .launcher-spin { animation-duration: 0.01ms; }
 }
