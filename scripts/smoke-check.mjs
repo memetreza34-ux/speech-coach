@@ -19,6 +19,7 @@ const requiredFiles = [
   'src/TeamCoach.jsx',
   'src/TrainingPlanCenter.jsx',
   'src/ErrorBoundary.jsx',
+  'api/_security.js',
   'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
@@ -51,11 +52,25 @@ expect(!persistedAudioBlock.includes('preciseTranscription'), 'word timestamps m
 const cloudSync = read('src/cloud/cloudSync.js')
 expect(cloudSync.includes("if (key === 'audioUrl'"), 'cloud payload scrubber must remove audioUrl')
 
+const apiSecurity = read('api/_security.js')
+expect(apiSecurity.includes("'Cache-Control', 'no-store, max-age=0'"), 'API guard must disable caching')
+expect(apiSecurity.includes("'X-Content-Type-Options', 'nosniff'"), 'API guard must set nosniff')
+expect(apiSecurity.includes("'X-Request-Id'"), 'API guard must attach request IDs')
+expect(apiSecurity.includes("'X-RateLimit-Limit'"), 'API guard must expose rate limit metadata')
+expect(apiSecurity.includes("response.status(429)"), 'API guard must reject excessive requests')
+expect(apiSecurity.includes('SPEECHCOACH_ALLOWED_ORIGINS'), 'API guard must support an explicit deployment origin allowlist')
+
+for (const endpoint of ['api/coach.js', 'api/team-coach.js', 'api/transcribe.js']) {
+  const content = read(endpoint)
+  expect(content.includes("from './_security.js'"), `${endpoint} does not import the shared API guard`)
+  expect(content.includes('guardApiRequest('), `${endpoint} does not execute the shared API guard`)
+  expect(content.includes('process.env.OPENAI_API_KEY'), `${endpoint} must use server-side OPENAI_API_KEY`)
+}
+
 const transcribe = read('api/transcribe.js')
-expect(transcribe.includes("process.env.OPENAI_API_KEY"), 'transcription endpoint must use server-side OPENAI_API_KEY')
-expect(transcribe.includes("response.setHeader('Cache-Control', 'no-store')"), 'transcription endpoint must disable caching')
 expect(transcribe.includes("form.append('model', 'whisper-1')"), 'timestamp transcription model changed unexpectedly')
 expect(transcribe.includes("form.append('timestamp_granularities[]', 'word')"), 'word timestamps are not requested')
+expect(transcribe.includes('rateLimit: 6'), 'transcription endpoint should retain the stricter request limit')
 
 const health = read('api/health.js')
 expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
@@ -73,6 +88,7 @@ const sourceFiles = [
   'src/AudioStudioPro.jsx',
   'src/cloud/cloudSync.js',
   'src/cloud/supabaseClient.js',
+  'api/_security.js',
   'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
@@ -85,6 +101,7 @@ for (const file of sourceFiles) {
 }
 
 const syntaxFiles = [
+  'api/_security.js',
   'api/health.js',
   'api/coach.js',
   'api/team-coach.js',
