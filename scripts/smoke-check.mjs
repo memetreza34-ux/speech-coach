@@ -24,6 +24,8 @@ const requiredFiles = [
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
+  'docs/API_SECURITY.md',
+  'docs/PRODUCTION_CHECKLIST.md',
   'supabase/speechcoach-cloud.sql',
   'vercel.json',
 ]
@@ -71,6 +73,10 @@ const transcribe = read('api/transcribe.js')
 expect(transcribe.includes("form.append('model', 'whisper-1')"), 'timestamp transcription model changed unexpectedly')
 expect(transcribe.includes("form.append('timestamp_granularities[]', 'word')"), 'word timestamps are not requested')
 expect(transcribe.includes('rateLimit: 6'), 'transcription endpoint should retain the stricter request limit')
+
+const apiSecurityDocs = read('docs/API_SECURITY.md')
+expect(apiSecurityDocs.includes('Produktions-WAF'), 'API security documentation must require a production WAF/distributed limiter')
+expect(apiSecurityDocs.includes('keine globale Rate-Limit-Garantie'), 'API security docs must state the in-memory limiter limitation')
 
 const health = read('api/health.js')
 expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
