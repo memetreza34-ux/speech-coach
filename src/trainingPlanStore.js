@@ -1,6 +1,7 @@
 import { getSupabaseClient } from './cloud/supabaseClient'
 
 const LOCAL_PLAN_PREFIX = 'speech-coach-training-plan:'
+const ACTIVE_TASK_KEY = 'speech-coach-active-plan-task'
 
 const localKey = (userId) => `${LOCAL_PLAN_PREFIX}${userId || 'guest'}`
 
@@ -153,10 +154,57 @@ export const saveTrainingPlan = async (plan, user) => {
   return { plan: normalized, source: 'cloud' }
 }
 
+export const setActiveTrainingPlanTask = (task, userId) => {
+  if (!task?.id || !task?.mode) return false
+  return safeWrite(ACTIVE_TASK_KEY, {
+    taskId: task.id,
+    mode: task.mode,
+    userId: userId || null,
+    startedAt: new Date().toISOString(),
+  })
+}
+
+export const completeActiveTrainingPlanTask = async (mode) => {
+  const activeTask = safeRead(ACTIVE_TASK_KEY)
+  if (!activeTask || activeTask.mode !== mode) return null
+
+  const plan = readLocalTrainingPlan(activeTask.userId)
+  if (!plan || !plan.weeks?.some((week) => week.tasks?.some((task) => task.id === activeTask.taskId))) {
+    localStorage.removeItem(ACTIVE_TASK_KEY)
+    return null
+  }
+
+  const completed = new Set(plan.completedTaskIds || [])
+  if (!completed.has(activeTask.taskId)) completed.add(activeTask.taskId)
+  const nextPlan = {
+    ...plan,
+    completedTaskIds: [...completed],
+    completionTimestamps: {
+      ...(plan.completionTimestamps || {}),
+      [activeTask.taskId]: new Date().toISOString(),
+    },
+    updatedAt: new Date().toISOString(),
+  }
+
+  localStorage.removeItem(ACTIVE_TASK_KEY)
+  try {
+    await saveTrainingPlan(nextPlan, activeTask.userId ? { id: activeTask.userId } : null)
+  } catch {
+    writeLocalTrainingPlan(nextPlan, activeTask.userId)
+  }
+
+  window.dispatchEvent(new CustomEvent('speechcoach:plan-task-completed', {
+    detail: { taskId: activeTask.taskId, mode },
+  }))
+  return nextPlan
+}
+
 export const deleteTrainingPlan = async (user) => {
   const userId = user?.id || null
   try {
     localStorage.removeItem(localKey(userId))
+    const activeTask = safeRead(ACTIVE_TASK_KEY)
+    if (activeTask?.userId === userId) localStorage.removeItem(ACTIVE_TASK_KEY)
   } catch {
     // Local deletion is best effort.
   }
