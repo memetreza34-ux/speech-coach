@@ -2,6 +2,8 @@ import { getSupabaseClient } from './cloud/supabaseClient'
 
 const LOCAL_PLAN_PREFIX = 'speech-coach-training-plan:'
 const ACTIVE_TASK_KEY = 'speech-coach-active-plan-task'
+const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
+const ACTIVE_TASK_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const HISTORY_BY_MODE = {
   solo: 'speech-coach-history',
   audio: 'speech-coach-audio-history',
@@ -53,6 +55,8 @@ const timestamp = (value) => {
   return Number.isFinite(time) ? time : 0
 }
 
+const completionSignature = (plan) => JSON.stringify([...(plan?.completedTaskIds || [])].sort())
+
 const mergeSamePlan = (localPlan, remotePlan) => {
   const completedTaskIds = [...new Set([
     ...(localPlan.completedTaskIds || []),
@@ -62,12 +66,15 @@ const mergeSamePlan = (localPlan, remotePlan) => {
     ...(remotePlan.completionTimestamps || {}),
     ...(localPlan.completionTimestamps || {}),
   }
-  const newer = timestamp(localPlan.updatedAt) >= timestamp(remotePlan.updatedAt) ? localPlan : remotePlan
+  const localUpdated = timestamp(localPlan.updatedAt)
+  const remoteUpdated = timestamp(remotePlan.updatedAt)
+  const newer = localUpdated >= remoteUpdated ? localPlan : remotePlan
+  const mergedUpdated = Math.max(localUpdated, remoteUpdated) || Date.now()
   return {
     ...newer,
     completedTaskIds,
     completionTimestamps,
-    updatedAt: new Date(Math.max(timestamp(localPlan.updatedAt), timestamp(remotePlan.updatedAt), Date.now())).toISOString(),
+    updatedAt: new Date(mergedUpdated).toISOString(),
   }
 }
 
@@ -131,7 +138,7 @@ export const loadTrainingPlan = async (user) => {
   const remoteDiffers = !remotePlan
     || remotePlan.id !== merged.id
     || timestamp(remotePlan.updatedAt) < timestamp(merged.updatedAt)
-    || (remotePlan.completedTaskIds || []).length !== (merged.completedTaskIds || []).length
+    || completionSignature(remotePlan) !== completionSignature(merged)
 
   if (remoteDiffers) {
     const { error: saveError } = await client
@@ -216,9 +223,17 @@ export const completeActiveTrainingPlanTask = async (mode) => {
 export const completeActiveTrainingPlanTaskFromHistory = async () => {
   const activeTask = safeRead(ACTIVE_TASK_KEY)
   if (!activeTask?.mode || !activeTask?.startedAt) return null
+
+  const currentOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
+  const wrongOwner = activeTask.userId ? currentOwner !== activeTask.userId : Boolean(currentOwner)
+  const expired = Date.now() - timestamp(activeTask.startedAt) > ACTIVE_TASK_MAX_AGE_MS
+  if (wrongOwner || expired) {
+    localStorage.removeItem(ACTIVE_TASK_KEY)
+    return null
+  }
+
   const historyKey = HISTORY_BY_MODE[activeTask.mode]
   if (!historyKey) return null
-
   const completedAfterStart = safeReadArray(historyKey).some((session) => (
     timestamp(session?.createdAt) >= timestamp(activeTask.startedAt)
   ))
