@@ -16,7 +16,7 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Wiederholung desselben Themas
 - lokaler Trainingsverlauf im Browser
 
-### Audio-Labor
+### Audio-Labor Pro
 
 - echte lokale Audiodatei-Aufnahme mit `MediaRecorder`
 - wählbare Aufgabe und Aufnahmedauer
@@ -25,11 +25,21 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Wiedergabe der eigenen Originalaufnahme
 - Lautstärke-Zeitleiste mit direkt anwählbaren Stellen
 - automatische Erkennung kurzer, mittlerer und langer Pausen
-- Bewertung von Stimmenergie, Dynamik, Pausengestaltung und Sprachfluss
-- Sprechanteil, Pausenanzahl und längste Pause
-- optionales Browser-Transkript mit Tempo und Füllwortanzahl
-- lokale Verarbeitung ohne automatischen Audio-Upload
-- Speicherung der Kennzahlen im Fortschrittsverlauf
+- Bewertung von Stimmenergie, Stimm-Dynamik, Pausengestaltung und Sprachfluss
+- lokale Tonhöhenanalyse aus der aufgezeichneten Audiospur
+- Median-Grundton sowie 10.–90.-Perzentil der erkannten Tonhöhe
+- Tonumfang in Halbtönen
+- Intonationsscore aus Tonumfang und Tonhöhenvariation
+- Sprechmelodie-Score aus melodischen Richtungswechseln und Variation
+- Monotonie-Risiko als zusätzlicher Trainingsindikator
+- interaktive Tonhöhenkurve mit Sprung zur jeweiligen Stelle der Aufnahme
+- optionales Browser-Live-Transkript
+- optionaler serverseitiger Präzisionsmodus mit Wort-Zeitmarken
+- Präzisionsmodus verwendet `/api/transcribe` und `whisper-1`, weil Wort-Zeitstempel für diesen Modellweg verfügbar sind
+- Präzisionsmodus ist pro Aufnahme standardmäßig deaktiviert und muss ausdrücklich aktiviert werden
+- bei Serverfehler bleibt die lokale Audioanalyse und das Browser-Transkript verfügbar
+- Audiodateien werden weder im lokalen Trainingsverlauf noch in Supabase gespeichert
+- der Fortschrittswert Stimm-Dynamik kombiniert bei neuen Aufnahmen Lautstärke-Dynamik, Intonation und Sprechmelodie
 
 ### Interaktiver Live-Coach
 
@@ -74,6 +84,7 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Aktivitätsübersicht für die letzten sieben Tage
 - filterbarer Verlauf für Solo-, Audio- und Dialogtrainings
 - Team-Coach fließt als Dialogtraining in Klarheit, Struktur und Wirkung ein; der exakte Team-Gesamtscore inklusive Gruppenführung bleibt zusätzlich in der Sitzung gespeichert
+- neue Audio-Aufnahmen verwenden einen erweiterten Stimm-Dynamik-Wert mit Lautstärke- und Tonhöhenmerkmalen
 - automatische Erkennung des schwächsten verfügbaren Bereichs
 - passende nächste Trainingsempfehlung mit direktem Einstieg
 
@@ -110,6 +121,7 @@ SpeechCoach ist ein deutschsprachiges Kommunikations-Gym für freie Rede, Argume
 - Synchronisierung wird bei Löschvorgängen automatisch pausiert, damit gelöschte Daten nicht sofort erneut geladen oder hochgeladen werden
 - endgültige Kontolöschung über eine authentifizierte Supabase Edge Function
 - Audiodateien werden niemals in den Cloud-Verlauf hochgeladen
+- Wort-Zeitmarken der Präzisionstranskription werden nicht in der Trainingshistorie oder in Supabase gespeichert
 - kontogetrennte Browser-Caches verhindern Datenvermischung auf gemeinsam genutzten Geräten
 
 ## Entwicklung
@@ -119,7 +131,7 @@ npm install
 npm run dev
 ```
 
-Der normale Vite-Entwicklungsserver verwendet für Live-Coach und Team-Coach automatisch die lokalen Ersatzmodi, solange `/api/coach` und `/api/team-coach` nicht durch eine Serverless-Umgebung bereitgestellt werden.
+Der normale Vite-Entwicklungsserver verwendet für Live-Coach und Team-Coach automatisch die lokalen Ersatzmodi, solange `/api/coach` und `/api/team-coach` nicht durch eine Serverless-Umgebung bereitgestellt werden. Die optionale Präzisionstranskription benötigt zusätzlich `/api/transcribe`; ohne Serverfunktion fällt das Audio-Labor auf Browser-Transkript plus vollständige lokale Stimm- und Tonhöhenanalyse zurück.
 
 ## Supabase-Cloud
 
@@ -171,20 +183,21 @@ Sie ist im verbundenen Projekt als `delete-speechcoach-account` aktiv und verlan
 
 Der Service-Role-Key ist ausschließlich in der Supabase-Laufzeit verfügbar und wird niemals an den Browser übertragen.
 
-## KI-Coaches aktivieren
+## OpenAI-Serverfunktionen aktivieren
 
 Die Serverfunktionen liegen unter:
 
 ```text
 api/coach.js
 api/team-coach.js
+api/transcribe.js
 ```
 
-Beide sind für eine Serverless-Bereitstellung wie Vercel ausgelegt und verwenden denselben ausschließlich serverseitigen OpenAI-Schlüssel.
+Alle drei sind für eine Serverless-Bereitstellung wie Vercel ausgelegt und verwenden denselben ausschließlich serverseitigen OpenAI-Schlüssel.
 
 1. `.env.example` als Vorlage verwenden.
 2. `OPENAI_API_KEY` ausschließlich als serverseitige Umgebungsvariable eintragen.
-3. Optional `OPENAI_MODEL` überschreiben. Standard ist `gpt-5`.
+3. Optional `OPENAI_MODEL` für die beiden Gesprächs-Coaches überschreiben. Standard ist `gpt-5`.
 4. Das Projekt über eine Plattform bereitstellen, die den Ordner `api/` als Serverfunktionen ausführt.
 
 ```env
@@ -192,7 +205,9 @@ OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5
 ```
 
-Der API-Schlüssel darf niemals als `VITE_OPENAI_API_KEY` oder anderweitig im Frontend gespeichert werden. Beide Serverfunktionen senden Anfragen mit `store: false` und erzwingen strukturierte JSON-Ausgaben. Beim Team-Coach akzeptiert der Server nur bekannte Szenario-IDs und verwendet die Rollenbeschreibungen aus seiner eigenen festen Szenariokonfiguration statt aus Browserdaten.
+Der API-Schlüssel darf niemals als `VITE_OPENAI_API_KEY` oder anderweitig im Frontend gespeichert werden. Die Gesprächs-Coach-Endpunkte senden ihre Modellanfragen mit `store: false` und erzwingen strukturierte JSON-Ausgaben. Beim Team-Coach akzeptiert der Server nur bekannte Szenario-IDs und verwendet die Rollenbeschreibungen aus seiner eigenen festen Szenariokonfiguration statt aus Browserdaten.
+
+`api/transcribe.js` verwendet gezielt `whisper-1` mit `verbose_json` und Wort-Zeitstempeln. Der Browser-Proxy begrenzt die übertragene Audiodatei auf 3 MB, damit die JSON/Base64-Anfrage innerhalb typischer Serverless-Request-Limits bleibt. Die allgemeine OpenAI-Dateitranskriptions-API unterstützt größere Dateien; das SpeechCoach-Limit ist eine eigene Transportgrenze dieses Endpunkts.
 
 ## Prüfung
 
@@ -205,17 +220,20 @@ Die GitHub-Actions-Prüfung kann zusätzlich manuell über den Workflow `SpeechC
 
 ## Datenschutz und technische Grenzen
 
-Die Audioaufnahme des Audio-Labors bleibt im Browser und wird nur für die aktuelle Ergebnissitzung als temporäre Objekt-URL vorgehalten. Lokal und in der Cloud werden ausschließlich die Audio-Kennzahlen gespeichert. Die browserbasierte Lautstärke- und Pausenanalyse ist ein Trainingsindikator und keine medizinische oder logopädische Beurteilung.
+Die Audioaufnahme des Audio-Labors wird für lokale Analyse und Wiedergabe als temporäre Browserdatei verarbeitet. Lautstärke-, Pausen-, Grundton-, Intonations- und Sprechmelodiewerte werden lokal berechnet. Die Audiodatei selbst wird nicht in `localStorage`, Supabase oder den synchronisierten Trainingsverlauf geschrieben.
 
-Transkripte werden erst dann in neue Cloud-Sitzungen aufgenommen, wenn der Nutzer die entsprechende Kontooption ausdrücklich aktiviert. Bereits ohne Transkript synchronisierte Sitzungen werden nicht nachträglich verändert.
+Wenn der Nutzer die Präzisionstranskription für eine konkrete Aufnahme aktiviert, wird diese Aufnahme an `/api/transcribe` und von dort an die konfigurierte OpenAI-Transkriptions-API übertragen. SpeechCoach persistiert die Audiodatei dabei nicht. Für die Verarbeitung beim API-Anbieter gelten dessen API-Datenbedingungen. Ohne diese ausdrückliche Aktivierung verlässt die Audiodatei für die SpeechCoach-eigene Analyse das Gerät nicht.
 
-Der JSON-Export kann Kontometadaten, Profilwerte, lokale Trainings, Cloud-Zeilen sowie die lokale und synchronisierte Planfassung enthalten. Temporäre Audiodateien sind nicht Bestandteil des Exports, da sie nicht dauerhaft gespeichert werden.
+Die Wort-Zeitmarken des serverseitigen Transkripts existieren nur in der aktuellen Ergebnisansicht. Im Audio-Verlauf werden lediglich Kennzahlen und die Information gespeichert, welcher Transkriptionsweg verwendet wurde. Dadurch werden Wort-Zeitmarken nicht versehentlich über die normale Sitzungssynchronisierung in die Cloud kopiert.
+
+Transkripte anderer Trainingsbereiche werden erst dann in neue Cloud-Sitzungen aufgenommen, wenn der Nutzer die entsprechende Kontooption ausdrücklich aktiviert. Bereits ohne Transkript synchronisierte Sitzungen werden nicht nachträglich verändert.
+
+Der JSON-Export kann Kontometadaten, Profilwerte, lokale Trainings, Cloud-Zeilen sowie die lokale und synchronisierte Planfassung enthalten. Temporäre Audiodateien und die nur im Ergebnis gehaltenen Wort-Zeitmarken sind nicht Bestandteil des Exports.
 
 Die automatische Planerledigung erkennt eine nach dem Aufgabenstart gespeicherte Trainingseinheit des passenden Modus. Ein nicht abgeschlossenes Training bleibt offen; ein Aufgabenstart verfällt spätestens nach zwölf Stunden.
 
 Die Rollen des Team-Coachs sind fiktive Trainingspersonen. Die Simulation bewertet nur kommunikative Merkmale der Nutzerantwort und darf keine geschützten Eigenschaften oder psychischen Zustände des Nutzers ableiten.
 
-Die optionale Live-Transkription hängt von der Web Speech Recognition API des Browsers ab. Für spätere Ausbaustufen sind zusätzlich vorgesehen:
+Die Grundton- und Intonationsanalyse ist eine browserbasierte technische Schätzung. Mikrofon, Raumakustik, Stimmtyp, Hintergrundgeräusche und Aufnahmeformat beeinflussen die Werte. Sie ist ein Trainingsindikator und keine medizinische, logopädische oder diagnostische Bewertung.
 
-- zuverlässiger serverseitiger Speech-to-Text-Dienst mit Zeitstempeln
-- Tonhöhen- und Intonationsanalyse
+Die optionale Browser-Live-Transkription hängt weiterhin von der Web Speech Recognition API des Browsers ab.
