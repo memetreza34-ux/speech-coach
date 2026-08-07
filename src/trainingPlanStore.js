@@ -3,6 +3,7 @@ import { getSupabaseClient } from './cloud/supabaseClient'
 const LOCAL_PLAN_PREFIX = 'speech-coach-training-plan:'
 const ACTIVE_TASK_KEY = 'speech-coach-active-plan-task'
 const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
+const PROFILE_KEY = 'speech-coach-account-profile'
 const ACTIVE_TASK_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const HISTORY_BY_MODE = {
   solo: 'speech-coach-history',
@@ -104,6 +105,13 @@ const planToRow = (plan, userId) => ({
   updated_at: plan.updatedAt || new Date().toISOString(),
 })
 
+const currentProfileAllowsCloud = (userId) => {
+  if (!userId) return false
+  if (localStorage.getItem(ACTIVE_OWNER_KEY) !== userId) return false
+  const profile = safeRead(PROFILE_KEY)
+  return profile?.syncEnabled !== false
+}
+
 export const readLocalTrainingPlan = (userId) => normalizePlan(safeRead(localKey(userId)))
 
 export const writeLocalTrainingPlan = (plan, userId) => {
@@ -114,10 +122,10 @@ export const writeLocalTrainingPlan = (plan, userId) => {
   return saved
 }
 
-export const loadTrainingPlan = async (user) => {
+export const loadTrainingPlan = async (user, cloudEnabled = true) => {
   const userId = user?.id || null
   const localPlan = readLocalTrainingPlan(userId)
-  if (!userId) return { plan: localPlan, source: localPlan ? 'local' : 'empty' }
+  if (!userId || !cloudEnabled) return { plan: localPlan, source: localPlan ? 'local' : 'empty' }
 
   const client = await getSupabaseClient()
   if (!client) return { plan: localPlan, source: localPlan ? 'local' : 'empty' }
@@ -153,7 +161,7 @@ export const loadTrainingPlan = async (user) => {
   }
 }
 
-export const saveTrainingPlan = async (plan, user) => {
+export const saveTrainingPlan = async (plan, user, cloudEnabled = true) => {
   const normalized = normalizePlan({
     ...plan,
     updatedAt: plan.updatedAt || new Date().toISOString(),
@@ -162,7 +170,7 @@ export const saveTrainingPlan = async (plan, user) => {
 
   const userId = user?.id || null
   writeLocalTrainingPlan(normalized, userId)
-  if (!userId) return { plan: normalized, source: 'local' }
+  if (!userId || !cloudEnabled) return { plan: normalized, source: 'local' }
 
   const client = await getSupabaseClient()
   if (!client) return { plan: normalized, source: 'local' }
@@ -208,8 +216,9 @@ export const completeActiveTrainingPlanTask = async (mode) => {
   }
 
   localStorage.removeItem(ACTIVE_TASK_KEY)
+  const cloudEnabled = currentProfileAllowsCloud(activeTask.userId)
   try {
-    await saveTrainingPlan(nextPlan, activeTask.userId ? { id: activeTask.userId } : null)
+    await saveTrainingPlan(nextPlan, activeTask.userId ? { id: activeTask.userId } : null, cloudEnabled)
   } catch {
     writeLocalTrainingPlan(nextPlan, activeTask.userId)
   }
@@ -241,7 +250,7 @@ export const completeActiveTrainingPlanTaskFromHistory = async () => {
   return completeActiveTrainingPlanTask(activeTask.mode)
 }
 
-export const deleteTrainingPlan = async (user) => {
+export const deleteTrainingPlan = async (user, cloudEnabled = true) => {
   const userId = user?.id || null
   try {
     localStorage.removeItem(localKey(userId))
@@ -252,7 +261,7 @@ export const deleteTrainingPlan = async (user) => {
   }
   window.dispatchEvent(new CustomEvent('speechcoach:plan-changed', { detail: { userId: userId || 'guest' } }))
 
-  if (!userId) return
+  if (!userId || !cloudEnabled) return
   const client = await getSupabaseClient()
   if (!client) return
   const { error } = await client
