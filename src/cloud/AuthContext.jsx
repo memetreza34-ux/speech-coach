@@ -9,6 +9,7 @@ import {
   syncTrainingData,
   updateCloudProfile,
 } from './cloudSync'
+import { readLocalTrainingPlan } from '../trainingPlanStore'
 
 const AuthContext = createContext(null)
 
@@ -20,7 +21,9 @@ const LOCAL_STORES = {
 const PROFILE_KEY = 'speech-coach-account-profile'
 const SYNC_STATE_KEY = 'speech-coach-sync-state'
 const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
+const ACTIVE_PLAN_TASK_KEY = 'speech-coach-active-plan-task'
 const USER_CACHE_PREFIX = 'speech-coach-user-cache:'
+const PLAN_PREFIX = 'speech-coach-training-plan:'
 
 const safeReadArray = (key) => {
   try {
@@ -38,7 +41,12 @@ const writeEmptyTrainingStores = () => {
 
 const clearLocalTrainingData = (userId) => {
   writeEmptyTrainingStores()
-  if (userId) localStorage.setItem(`${USER_CACHE_PREFIX}${userId}`, JSON.stringify({ solo: [], dialog: [], audio: [] }))
+  if (userId) {
+    localStorage.setItem(`${USER_CACHE_PREFIX}${userId}`, JSON.stringify({ solo: [], dialog: [], audio: [] }))
+    localStorage.removeItem(`${PLAN_PREFIX}${userId}`)
+  }
+  localStorage.removeItem(ACTIVE_PLAN_TASK_KEY)
+  window.dispatchEvent(new CustomEvent('speechcoach:plan-changed', { detail: { userId: userId || 'guest' } }))
 }
 
 const purgeLocalAccountData = (userId) => {
@@ -50,15 +58,21 @@ const purgeLocalAccountData = (userId) => {
 }
 
 const exportAccountData = async (client, currentUser, currentProfile) => {
-  const [{ data: cloudSessions, error: sessionError }, { data: cloudProfile, error: profileError }] = await Promise.all([
+  const [
+    { data: cloudSessions, error: sessionError },
+    { data: cloudProfile, error: profileError },
+    { data: cloudPlan, error: planError },
+  ] = await Promise.all([
     client.from('speechcoach_sessions').select('*').order('started_at', { ascending: false }).limit(1000),
     client.from('speechcoach_profiles').select('*').eq('user_id', currentUser.id).maybeSingle(),
+    client.from('speechcoach_training_plans').select('*').eq('user_id', currentUser.id).maybeSingle(),
   ])
   if (sessionError) throw sessionError
   if (profileError) throw profileError
+  if (planError) throw planError
 
   return {
-    exportVersion: 1,
+    exportVersion: 2,
     generatedAt: new Date().toISOString(),
     account: {
       id: currentUser.id,
@@ -73,6 +87,10 @@ const exportAccountData = async (client, currentUser, currentProfile) => {
       audio: safeReadArray(LOCAL_STORES.audio),
     },
     cloudTraining: cloudSessions || [],
+    trainingPlan: {
+      local: readLocalTrainingPlan(currentUser.id),
+      cloud: cloudPlan || null,
+    },
     notes: {
       audioFilesIncluded: false,
       transcriptsMayBeExcluded: currentProfile?.storeTranscripts !== true,
@@ -81,13 +99,24 @@ const exportAccountData = async (client, currentUser, currentProfile) => {
 }
 
 const deleteCloudTrainingData = async (client, currentUser) => {
-  const { data, error } = await client
-    .from('speechcoach_sessions')
-    .delete()
-    .eq('user_id', currentUser.id)
-    .select('id')
-  if (error) throw error
-  return { deleted: data?.length || 0 }
+  const [sessionResult, planResult] = await Promise.all([
+    client
+      .from('speechcoach_sessions')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .select('id'),
+    client
+      .from('speechcoach_training_plans')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .select('user_id'),
+  ])
+  if (sessionResult.error) throw sessionResult.error
+  if (planResult.error) throw planResult.error
+  return {
+    deleted: sessionResult.data?.length || 0,
+    planDeleted: Boolean(planResult.data?.length),
+  }
 }
 
 const TRAINING_KEYS = [
