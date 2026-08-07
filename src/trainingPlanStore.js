@@ -2,6 +2,11 @@ import { getSupabaseClient } from './cloud/supabaseClient'
 
 const LOCAL_PLAN_PREFIX = 'speech-coach-training-plan:'
 const ACTIVE_TASK_KEY = 'speech-coach-active-plan-task'
+const HISTORY_BY_MODE = {
+  solo: 'speech-coach-history',
+  audio: 'speech-coach-audio-history',
+  coach: 'speech-coach-dialog-history',
+}
 
 const localKey = (userId) => `${LOCAL_PLAN_PREFIX}${userId || 'guest'}`
 
@@ -11,6 +16,15 @@ const safeRead = (key) => {
     return value && typeof value === 'object' ? value : null
   } catch {
     return null
+  }
+}
+
+const safeReadArray = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
   }
 }
 
@@ -197,6 +211,19 @@ export const completeActiveTrainingPlanTask = async (mode) => {
     detail: { taskId: activeTask.taskId, mode },
   }))
   return nextPlan
+}
+
+export const completeActiveTrainingPlanTaskFromHistory = async () => {
+  const activeTask = safeRead(ACTIVE_TASK_KEY)
+  if (!activeTask?.mode || !activeTask?.startedAt) return null
+  const historyKey = HISTORY_BY_MODE[activeTask.mode]
+  if (!historyKey) return null
+
+  const completedAfterStart = safeReadArray(historyKey).some((session) => (
+    timestamp(session?.createdAt) >= timestamp(activeTask.startedAt)
+  ))
+  if (!completedAfterStart) return null
+  return completeActiveTrainingPlanTask(activeTask.mode)
 }
 
 export const deleteTrainingPlan = async (user) => {
