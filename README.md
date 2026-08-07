@@ -205,7 +205,7 @@ Der API-Schlüssel darf niemals als `VITE_OPENAI_API_KEY` oder anderweitig im Fr
 
 `api/_security.js` schützt `/api/coach`, `/api/team-coach` und `/api/transcribe` zentral mit Methodenprüfung, Same-Origin-/Allowlist-Prüfung, Body-Limits, No-Store-Headern, Request-IDs und einem best-effort per-Instance-Rate-Limit. Die Transkription besitzt dabei bewusst das strengste Limit.
 
-Ein serverloser In-Memory-Limiter ist keine global verteilte Garantie. Vor einem öffentlichen Release muss deshalb zusätzlich ein globales WAF- beziehungsweise Distributed-Rate-Limit auf der Hosting-Plattform aktiviert und getestet werden. Die vollständige Betriebsanleitung und vorgeschlagenen Startwerte stehen unter:
+Ein serverloser In-Memory-Limiter ist **keine global verteilte Rate-Limit-Garantie**. Vor einem öffentlichen Release muss deshalb zusätzlich ein globales WAF- beziehungsweise Distributed-Rate-Limit auf der Hosting-Plattform aktiviert und getestet werden. Die vollständige Betriebsanleitung und vorgeschlagenen Startwerte stehen unter:
 
 ```text
 docs/API_SECURITY.md
