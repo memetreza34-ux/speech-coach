@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import App from './App.jsx'
 import AccountCenter from './AccountCenter.jsx'
-import AudioStudio from './AudioStudio.jsx'
+import AudioStudio from './AudioStudioPro.jsx'
 import ConversationCoach from './ConversationCoach.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
 import TeamCoach from './TeamCoach.jsx'
@@ -27,6 +27,7 @@ import './conversation.css'
 import './team-coach.css'
 import './progress.css'
 import './audio-lab.css'
+import './audio-advanced.css'
 import './account.css'
 import './account-security.css'
 import './training-plan.css'
@@ -88,7 +89,7 @@ function SpeechCoachExperience() {
 
             <motion.button className="audio-launcher" onClick={openAudio} whileHover={{ y: -3 }} whileTap={{ scale: 0.98 }}>
               <span className="audio-launcher-icon"><AudioLines size={22} /></span>
-              <span className="audio-launcher-copy"><strong>Audio-Labor</strong><small>Stimme, Dynamik und Pausen</small></span>
+              <span className="audio-launcher-copy"><strong>Audio-Labor Pro</strong><small>Stimme, Pitch und Pausen</small></span>
               <ArrowUpRight size={18} />
             </motion.button>
 
