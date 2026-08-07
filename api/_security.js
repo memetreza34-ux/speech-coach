@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 const DEFAULT_WINDOW_MS = 60_000
 const DEFAULT_LIMIT = 20
 const MAX_BUCKETS = 2_000
@@ -97,7 +99,7 @@ const estimateBodyBytes = (request) => {
   return 0
 }
 
-export const applyApiResponseHeaders = (response, requestId = crypto.randomUUID()) => {
+export const applyApiResponseHeaders = (response, requestId = randomUUID()) => {
   response.setHeader('Cache-Control', 'no-store, max-age=0')
   response.setHeader('X-Content-Type-Options', 'nosniff')
   response.setHeader('Referrer-Policy', 'no-referrer')
