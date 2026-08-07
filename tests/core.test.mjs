@@ -11,6 +11,7 @@ import {
 import { COACH_MODES, DIFFICULTIES } from '../src/coachScenarios.js'
 import { TEAM_SCENARIOS } from '../src/teamScenarios.js'
 import { groupTimestampWords } from '../src/serverTranscription.js'
+import { clearApiRateLimitsForTests, guardApiRequest } from '../api/_security.js'
 import healthHandler from '../api/health.js'
 import coachHandler from '../api/coach.js'
 import teamCoachHandler from '../api/team-coach.js'
@@ -139,25 +140,104 @@ test('health endpoint exposes readiness without secrets', () => {
 test('serverless endpoints reject unsupported methods', async () => {
   for (const handler of [coachHandler, teamCoachHandler, transcribeHandler]) {
     const response = createMockResponse()
-    await handler({ method: 'GET' }, response)
+    await handler({ method: 'GET', headers: {} }, response)
     assert.equal(response.state.statusCode, 405)
     assert.match(String(response.state.headers.Allow), /POST/)
+    assert.equal(typeof response.state.headers['X-Request-Id'], 'string')
   }
 })
 
 test('AI endpoints fail closed when the server key is missing', async () => {
   const previousKey = process.env.OPENAI_API_KEY
   delete process.env.OPENAI_API_KEY
+  clearApiRateLimitsForTests()
 
   try {
-    for (const handler of [coachHandler, teamCoachHandler, transcribeHandler]) {
+    for (const [index, handler] of [coachHandler, teamCoachHandler, transcribeHandler].entries()) {
       const response = createMockResponse()
-      await handler({ method: 'POST', body: {} }, response)
+      await handler({
+        method: 'POST',
+        body: {},
+        headers: { 'x-forwarded-for': `198.51.100.${index + 1}` },
+      }, response)
       assert.equal(response.state.statusCode, 503)
       assert.equal(response.state.ended, true)
+      assert.equal(typeof response.state.body.requestId, 'string')
     }
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY
     else process.env.OPENAI_API_KEY = previousKey
   }
+})
+
+test('API guard rejects foreign origins, oversized bodies and wrong content types', () => {
+  clearApiRateLimitsForTests()
+
+  const foreignResponse = createMockResponse()
+  const foreign = guardApiRequest({
+    method: 'POST',
+    body: {},
+    headers: {
+      origin: 'https://attacker.example',
+      host: 'speechcoach.example',
+      'x-forwarded-proto': 'https',
+      'x-forwarded-for': '203.0.113.10',
+      'content-type': 'application/json',
+    },
+  }, foreignResponse, { scope: 'origin-test' })
+  assert.equal(foreign.ok, false)
+  assert.equal(foreignResponse.state.statusCode, 403)
+
+  const largeResponse = createMockResponse()
+  const large = guardApiRequest({
+    method: 'POST',
+    body: {},
+    headers: {
+      'content-length': '4096',
+      'x-forwarded-for': '203.0.113.11',
+      'content-type': 'application/json',
+    },
+  }, largeResponse, { scope: 'body-test', maxBodyBytes: 128 })
+  assert.equal(large.ok, false)
+  assert.equal(largeResponse.state.statusCode, 413)
+
+  const typeResponse = createMockResponse()
+  const wrongType = guardApiRequest({
+    method: 'POST',
+    body: 'hello',
+    headers: {
+      'content-type': 'text/plain',
+      'x-forwarded-for': '203.0.113.12',
+    },
+  }, typeResponse, { scope: 'type-test' })
+  assert.equal(wrongType.ok, false)
+  assert.equal(typeResponse.state.statusCode, 415)
+})
+
+test('API guard accepts same-origin traffic and rate-limits repeated requests', () => {
+  clearApiRateLimitsForTests()
+  const request = {
+    method: 'POST',
+    body: {},
+    headers: {
+      origin: 'https://speechcoach.example',
+      host: 'speechcoach.example',
+      'x-forwarded-proto': 'https',
+      'x-forwarded-for': '203.0.113.40',
+      'content-type': 'application/json',
+    },
+  }
+
+  for (let index = 0; index < 2; index += 1) {
+    const response = createMockResponse()
+    const result = guardApiRequest(request, response, { scope: 'rate-test', rateLimit: 2, rateWindowMs: 60_000 })
+    assert.equal(result.ok, true)
+    assert.equal(response.state.headers['X-RateLimit-Limit'], '2')
+  }
+
+  const blockedResponse = createMockResponse()
+  const blocked = guardApiRequest(request, blockedResponse, { scope: 'rate-test', rateLimit: 2, rateWindowMs: 60_000 })
+  assert.equal(blocked.ok, false)
+  assert.equal(blockedResponse.state.statusCode, 429)
+  assert.equal(typeof blockedResponse.state.headers['Retry-After'], 'string')
 })
