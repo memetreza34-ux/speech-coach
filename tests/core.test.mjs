@@ -11,6 +11,7 @@ import {
 import { COACH_MODES, DIFFICULTIES } from '../src/coachScenarios.js'
 import { TEAM_SCENARIOS } from '../src/teamScenarios.js'
 import { groupTimestampWords } from '../src/serverTranscription.js'
+import { abortActiveRequests, activeRequestCountForTests, createTrackedRequest } from '../src/requestLifecycle.js'
 import { clearApiRateLimitsForTests, guardApiRequest } from '../api/_security.js'
 import healthHandler from '../api/health.js'
 import coachHandler from '../api/coach.js'
@@ -123,6 +124,37 @@ test('word timestamps are grouped into clickable transcript chunks', () => {
   assert.equal(groups[0].start, 0.1)
   assert.equal(groups[0].end, 1.8)
   assert.equal(groups[1].text, 'Weiter.')
+})
+
+test('request lifecycle aborts all active tracked requests', () => {
+  abortActiveRequests()
+  const first = createTrackedRequest()
+  const second = createTrackedRequest()
+
+  assert.equal(activeRequestCountForTests(), 2)
+  assert.equal(first.signal.aborted, false)
+  assert.equal(second.signal.aborted, false)
+
+  abortActiveRequests()
+
+  assert.equal(first.signal.aborted, true)
+  assert.equal(second.signal.aborted, true)
+  assert.equal(activeRequestCountForTests(), 0)
+  first.release()
+  second.release()
+})
+
+test('tracked requests inherit an external abort signal and release cleanly', () => {
+  abortActiveRequests()
+  const external = new AbortController()
+  const tracked = createTrackedRequest(external.signal)
+
+  assert.equal(activeRequestCountForTests(), 1)
+  external.abort()
+  assert.equal(tracked.signal.aborted, true)
+
+  tracked.release()
+  assert.equal(activeRequestCountForTests(), 0)
 })
 
 test('health endpoint exposes readiness without secrets', () => {
