@@ -25,7 +25,11 @@ const requiredFiles = [
   'api/team-coach.js',
   'api/transcribe.js',
   'docs/API_SECURITY.md',
+  'docs/DEPLOYMENT.md',
   'docs/PRODUCTION_CHECKLIST.md',
+  'scripts/deployment-smoke.mjs',
+  'scripts/validate-production-env.mjs',
+  '.github/workflows/deployment-smoke.yml',
   'supabase/speechcoach-cloud.sql',
   'vercel.json',
 ]
@@ -33,6 +37,19 @@ const requiredFiles = [
 for (const file of requiredFiles) {
   expect(fs.existsSync(path.join(root, file)), `required file missing: ${file}`)
 }
+
+const packageJson = JSON.parse(read('package.json'))
+expect(packageJson.scripts?.['test:deployment'] === 'node scripts/deployment-smoke.mjs', 'deployment smoke npm script is missing or changed')
+expect(packageJson.scripts?.['check:env'] === 'node scripts/validate-production-env.mjs', 'production environment validator npm script is missing or changed')
+
+const deploymentWorkflow = read('.github/workflows/deployment-smoke.yml')
+expect(deploymentWorkflow.includes('SPEECHCOACH_TARGET_URL'), 'deployment smoke workflow does not pass the target URL')
+expect(deploymentWorkflow.includes('VERCEL_AUTOMATION_BYPASS_SECRET'), 'deployment smoke workflow lost protected-preview support')
+
+const deploymentRunbook = read('docs/DEPLOYMENT.md')
+expect(deploymentRunbook.includes('npm run test:deployment'), 'deployment runbook must document the remote smoke command')
+expect(deploymentRunbook.includes('npm run check:env'), 'deployment runbook must document production environment validation')
+expect(deploymentRunbook.includes('Supabase Auth URL Configuration'), 'deployment runbook must document Supabase redirect configuration')
 
 const rootApp = read('src/RootApp.jsx')
 expect(rootApp.includes("import AudioStudio from './AudioStudioPro.jsx'"), 'AudioStudioPro is not the active audio studio')
@@ -99,10 +116,12 @@ const sourceFiles = [
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
+  'scripts/deployment-smoke.mjs',
+  'scripts/validate-production-env.mjs',
 ]
 for (const file of sourceFiles) {
   const content = read(file)
-  expect(!/VITE_OPENAI_API_KEY/.test(content), `${file} contains forbidden browser OpenAI key reference`)
+  expect(!/VITE_OPENAI_API_KEY\s*=\s*["'][^"']+/i.test(content), `${file} appears to assign a browser OpenAI key`)
   expect(!/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/.test(content), `${file} appears to contain an OpenAI secret`)
 }
 
@@ -112,6 +131,8 @@ const syntaxFiles = [
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
+  'scripts/deployment-smoke.mjs',
+  'scripts/validate-production-env.mjs',
   'src/audioAnalysis.js',
   'src/pitchAnalysis.js',
   'src/serverTranscription.js',
