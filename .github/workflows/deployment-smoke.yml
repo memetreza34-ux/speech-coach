@@ -37,4 +37,5 @@ jobs:
         env:
           SPEECHCOACH_TARGET_URL: ${{ inputs.target_url }}
           EXPECT_AI_CONFIGURED: ${{ inputs.expect_ai_configured }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run test:deployment
