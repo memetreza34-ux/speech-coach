@@ -1,3 +1,5 @@
+import { createTrackedRequest } from './requestLifecycle.js'
+
 const clamp = (value, minimum = 0, maximum = 100) => Math.min(maximum, Math.max(minimum, value))
 
 const countWords = (text) => text.trim().split(/\s+/).filter(Boolean).length
@@ -66,6 +68,7 @@ const offlineWithDiagnostics = (payload, diagnostics = {}) => ({
 })
 
 export const requestCoachTurn = async (payload, { signal } = {}) => {
+  const tracked = createTrackedRequest(signal)
   try {
     const response = await fetch('/api/coach', {
       method: 'POST',
@@ -83,7 +86,7 @@ export const requestCoachTurn = async (payload, { signal } = {}) => {
         totalRounds: payload.totalRounds,
         conversation: payload.conversation.slice(-10),
       }),
-      signal,
+      signal: tracked.signal,
     })
 
     const result = await response.json().catch(() => ({}))
@@ -101,5 +104,7 @@ export const requestCoachTurn = async (payload, { signal } = {}) => {
   } catch (error) {
     if (error?.name === 'AbortError') throw error
     return offlineWithDiagnostics(payload, { fallbackReason: 'network' })
+  } finally {
+    tracked.release()
   }
 }
