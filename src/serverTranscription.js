@@ -44,13 +44,15 @@ const buildTranscriptionError = (response, result) => {
   return error
 }
 
-export const requestServerTranscription = async (blob, { topic = '', language = 'de' } = {}) => {
+export const requestServerTranscription = async (blob, { topic = '', language = 'de', signal } = {}) => {
   if (!blob?.size) throw new Error('Keine Audiodatei verfügbar.')
   if (blob.size > MAX_UPLOAD_BYTES) {
     throw new Error('Die Aufnahme ist für die optionale Präzisionstranskription zu groß. Die lokale Analyse bleibt verfügbar.')
   }
 
   const audioBase64 = await blobToBase64(blob)
+  if (signal?.aborted) throw new DOMException('Transkription abgebrochen.', 'AbortError')
+
   const response = await fetch('/api/transcribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,6 +62,7 @@ export const requestServerTranscription = async (blob, { topic = '', language = 
       language,
       context: String(topic || '').slice(0, 300),
     }),
+    signal,
   })
 
   const result = await response.json().catch(() => ({}))
