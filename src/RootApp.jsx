@@ -23,6 +23,7 @@ import TeamCoach from './TeamCoach.jsx'
 import TrainingPlanCenter from './TrainingPlanCenter.jsx'
 import TrainingPlanCompletionBridge from './TrainingPlanCompletionBridge.jsx'
 import { AuthProvider, useAuth } from './cloud/AuthContext.jsx'
+import { abortActiveRequests } from './requestLifecycle.js'
 import './conversation.css'
 import './team-coach.css'
 import './progress.css'
@@ -74,6 +75,7 @@ function SpeechCoachExperience() {
     if (activeView === null && document.activeElement instanceof HTMLElement) {
       returnFocusRef.current = document.activeElement.dataset.focusKey || null
     }
+    if (activeView && activeView !== view) abortActiveRequests()
     setActiveView(view)
   }, [activeView])
 
@@ -85,9 +87,19 @@ function SpeechCoachExperience() {
   const openAccount = () => openView('account')
 
   const closeOverlay = useCallback(() => {
+    abortActiveRequests()
     setActiveView(null)
     restoreLauncherFocus()
   }, [restoreLauncherFocus])
+
+  useEffect(() => {
+    const abortOnPageHide = () => abortActiveRequests()
+    window.addEventListener('pagehide', abortOnPageHide)
+    return () => {
+      window.removeEventListener('pagehide', abortOnPageHide)
+      abortActiveRequests()
+    }
+  }, [])
 
   useEffect(() => {
     if (!activeView) return undefined
