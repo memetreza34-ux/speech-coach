@@ -25,6 +25,7 @@ const requiredFiles = [
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
+  'docs/ACCESSIBILITY.md',
   'docs/API_SECURITY.md',
   'docs/DEPLOYMENT.md',
   'docs/PRODUCTION_CHECKLIST.md',
@@ -51,6 +52,11 @@ const deploymentRunbook = read('docs/DEPLOYMENT.md')
 expect(deploymentRunbook.includes('npm run test:deployment'), 'deployment runbook must document the remote smoke command')
 expect(deploymentRunbook.includes('npm run check:env'), 'deployment runbook must document production environment validation')
 expect(deploymentRunbook.includes('Supabase Auth URL Configuration'), 'deployment runbook must document Supabase redirect configuration')
+
+const accessibilityDocs = read('docs/ACCESSIBILITY.md')
+expect(accessibilityDocs.includes('Nur Tastatur'), 'accessibility documentation must retain the keyboard release checklist')
+expect(accessibilityDocs.includes('Screenreader'), 'accessibility documentation must retain real screenreader testing')
+expect(accessibilityDocs.includes('Nicht behaupten ohne echten Test'), 'accessibility documentation must not overstate compliance')
 
 const rootApp = read('src/RootApp.jsx')
 expect(rootApp.includes("import AudioStudio from './AudioStudioPro.jsx'"), 'AudioStudioPro is not the active audio studio')
