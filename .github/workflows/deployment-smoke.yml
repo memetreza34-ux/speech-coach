@@ -1,0 +1,40 @@
+name: SpeechCoach Deployment Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: HTTPS URL of the deployed SpeechCoach instance
+        required: true
+        type: string
+      expect_ai_configured:
+        description: Require OPENAI_API_KEY to be configured in the deployment
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speechcoach-deployment-smoke-${{ inputs.target_url }}
+  cancel-in-progress: true
+
+jobs:
+  remote-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify deployed application
+        env:
+          SPEECHCOACH_TARGET_URL: ${{ inputs.target_url }}
+          EXPECT_AI_CONFIGURED: ${{ inputs.expect_ai_configured }}
+        run: npm run test:deployment
