@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowUpRight,
@@ -59,12 +59,23 @@ function SpeechCoachExperience() {
   const returnFocusRef = useRef(null)
   const appVisible = activeView === null
 
-  const openView = (view) => {
+  const restoreLauncherFocus = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const focusKey = returnFocusRef.current
+      const target = focusKey
+        ? document.querySelector(`[data-focus-key="${focusKey}"]`)
+        : document.querySelector('.feature-launchers button')
+      if (target instanceof HTMLElement) target.focus()
+      returnFocusRef.current = null
+    })
+  }, [])
+
+  const openView = useCallback((view) => {
     if (activeView === null && document.activeElement instanceof HTMLElement) {
-      returnFocusRef.current = document.activeElement
+      returnFocusRef.current = document.activeElement.dataset.focusKey || null
     }
     setActiveView(view)
-  }
+  }, [activeView])
 
   const openCoach = () => openView('coach')
   const openTeamCoach = () => openView('team-coach')
@@ -73,14 +84,10 @@ function SpeechCoachExperience() {
   const openAudio = () => openView('audio')
   const openAccount = () => openView('account')
 
-  const closeOverlay = () => {
+  const closeOverlay = useCallback(() => {
     setActiveView(null)
-    window.requestAnimationFrame(() => {
-      const previous = returnFocusRef.current
-      if (previous instanceof HTMLElement && document.contains(previous)) previous.focus()
-      returnFocusRef.current = null
-    })
-  }
+    restoreLauncherFocus()
+  }, [restoreLauncherFocus])
 
   useEffect(() => {
     if (!activeView) return undefined
@@ -105,7 +112,7 @@ function SpeechCoachExperience() {
       window.cancelAnimationFrame(focusFrame)
       document.body.style.overflow = previousOverflow
     }
-  }, [activeView])
+  }, [activeView, closeOverlay])
 
   const AccountStatusIcon = syncStatus?.status === 'syncing'
     ? LoaderCircle
@@ -139,7 +146,7 @@ function SpeechCoachExperience() {
             exit={launcherMotion.exit}
             transition={launcherMotion.transition}
           >
-            <motion.button className="account-launcher" onClick={openAccount} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+            <motion.button data-focus-key="account" className="account-launcher" onClick={openAccount} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
               <span className="account-launcher-icon"><UserRound size={21} /></span>
               <span className="account-launcher-copy">
                 <strong>{signedIn ? profile?.displayName || 'Mein Konto' : 'Konto & Cloud'}</strong>
@@ -148,31 +155,31 @@ function SpeechCoachExperience() {
               <AccountStatusIcon className={syncStatus?.status === 'syncing' ? 'launcher-spin' : ''} size={18} />
             </motion.button>
 
-            <motion.button className="plan-launcher" onClick={openPlan} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+            <motion.button data-focus-key="plan" className="plan-launcher" onClick={openPlan} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
               <span className="plan-launcher-icon"><CalendarRange size={21} /></span>
               <span className="plan-launcher-copy"><strong>4-Wochen-Plan</strong><small>Adaptiv und täglich geführt</small></span>
               <ArrowUpRight size={18} />
             </motion.button>
 
-            <motion.button className="progress-launcher" onClick={openProgress} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+            <motion.button data-focus-key="progress" className="progress-launcher" onClick={openProgress} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
               <span className="progress-launcher-icon"><BarChart3 size={21} /></span>
               <span className="progress-launcher-copy"><strong>Fortschritt</strong><small>Profil und Trainingsplan</small></span>
               <ArrowUpRight size={18} />
             </motion.button>
 
-            <motion.button className="audio-launcher" onClick={openAudio} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+            <motion.button data-focus-key="audio" className="audio-launcher" onClick={openAudio} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
               <span className="audio-launcher-icon"><AudioLines size={22} /></span>
               <span className="audio-launcher-copy"><strong>Audio-Labor Pro</strong><small>Stimme, Pitch und Pausen</small></span>
               <ArrowUpRight size={18} />
             </motion.button>
 
-            <motion.button className="team-launcher" onClick={openTeamCoach} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.97 }}>
+            <motion.button data-focus-key="team-coach" className="team-launcher" onClick={openTeamCoach} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.97 }}>
               <span className="team-launcher-icon"><Users size={22} /></span>
               <span className="team-launcher-copy"><small><Sparkles size={12} /> Mehrpersonen</small><strong>Team-Coach</strong><em>Mehrere Rollen gleichzeitig</em></span>
               <MessageCircleMore size={20} />
             </motion.button>
 
-            <motion.button className="coach-launcher" onClick={openCoach} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.97 }}>
+            <motion.button data-focus-key="coach" className="coach-launcher" onClick={openCoach} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.97 }}>
               <span className="coach-launcher-icon"><Bot size={22} /></span>
               <span className="coach-launcher-copy"><small><Sparkles size={12} /> Interaktiv</small><strong>Live-Coach</strong><em>Gespräch mit Rückfragen</em></span>
               <MessageCircleMore size={20} />
