@@ -11,6 +11,7 @@ import {
 import { COACH_MODES, DIFFICULTIES } from '../src/coachScenarios.js'
 import { TEAM_SCENARIOS } from '../src/teamScenarios.js'
 import { groupTimestampWords } from '../src/serverTranscription.js'
+import { combineAudioAndPitchAnalysis, stabilizePitchPoints, summarizePitchPoints } from '../src/pitchAnalysis.js'
 import { abortActiveRequests, activeRequestCountForTests, createTrackedRequest } from '../src/requestLifecycle.js'
 import { clearApiRateLimitsForTests, guardApiRequest } from '../api/_security.js'
 import healthHandler from '../api/health.js'
@@ -39,6 +40,12 @@ const createMockResponse = () => {
     },
   }
 }
+
+const pitchPoints = (frequencies, confidence = 0.9) => frequencies.map((hz, index) => ({
+  timeMs: index * 40,
+  hz,
+  confidence,
+}))
 
 test('training plan always spans four weeks and clamps weekly sessions', () => {
   const lowGoal = generateTrainingPlan({ weeklyGoal: 1, previousPlanId: 'test-low' })
@@ -124,6 +131,67 @@ test('word timestamps are grouped into clickable transcript chunks', () => {
   assert.equal(groups[0].start, 0.1)
   assert.equal(groups[0].end, 1.8)
   assert.equal(groups[1].text, 'Weiter.')
+})
+
+test('pitch stabilization removes an isolated octave error without inventing melody', () => {
+  const raw = pitchPoints([120, 121, 119, 120, 240, 121, 120, 119, 120, 121, 120])
+  const stable = stabilizePitchPoints(raw)
+  const summary = summarizePitchPoints(raw, { durationMs: 30_000, totalFrameCount: 15 })
+
+  assert.ok(Math.max(...stable.map((point) => point.hz)) < 140)
+  assert.equal(summary.available, true)
+  assert.equal(summary.octaveCorrectionCount, 1)
+  assert.ok(summary.pitchRangeSemitones < 1)
+  assert.ok(summary.directionChanges <= 1)
+})
+
+test('expressive pitch movement scores above a near-flat jitter curve', () => {
+  const steady = summarizePitchPoints(
+    pitchPoints([120, 121, 120, 119, 120, 121, 120, 119, 120, 121, 120, 119, 120, 121, 120, 119, 120, 121, 120, 119]),
+    { durationMs: 30_000, totalFrameCount: 25 },
+  )
+  const expressive = summarizePitchPoints(
+    pitchPoints([105, 110, 116, 124, 132, 126, 118, 110, 104, 109, 117, 126, 134, 128, 120, 112, 106, 111, 119, 128]),
+    { durationMs: 30_000, totalFrameCount: 25 },
+  )
+
+  assert.equal(steady.available, true)
+  assert.equal(expressive.available, true)
+  assert.ok(expressive.pitchRangeSemitones > steady.pitchRangeSemitones)
+  assert.ok(expressive.directionChanges > steady.directionChanges)
+  assert.ok(expressive.scores.melody > steady.scores.melody)
+})
+
+test('pitch confidence reflects correlation quality and voiced coverage', () => {
+  const frequencies = [110, 113, 117, 121, 124, 122, 118, 114, 111, 115, 120, 125]
+  const high = summarizePitchPoints(pitchPoints(frequencies, 0.9), { durationMs: 20_000, totalFrameCount: 16 })
+  const low = summarizePitchPoints(pitchPoints(frequencies, 0.58), { durationMs: 20_000, totalFrameCount: 30 })
+
+  assert.ok(high.analysisConfidence > low.analysisConfidence)
+  assert.equal(high.quality, 'high')
+  assert.equal(low.quality, 'low')
+  assert.ok(high.voicedFrameRatio > low.voicedFrameRatio)
+})
+
+test('uncertain pitch has less influence on the combined audio score', () => {
+  const audio = {
+    score: 80,
+    scores: { energy: 80, dynamics: 80, pauses: 80, flow: 80 },
+    strengths: [],
+    improvements: [],
+  }
+  const pitchBase = {
+    available: true,
+    scores: { intonation: 45, melody: 45 },
+    strengths: [],
+    improvements: [],
+  }
+
+  const uncertain = combineAudioAndPitchAnalysis(audio, { ...pitchBase, analysisConfidence: 30 })
+  const confident = combineAudioAndPitchAnalysis(audio, { ...pitchBase, analysisConfidence: 90 })
+
+  assert.ok(uncertain.scores.dynamics > confident.scores.dynamics)
+  assert.ok(uncertain.score > confident.score)
 })
 
 test('request lifecycle aborts all active tracked requests', () => {
@@ -241,7 +309,7 @@ test('API guard rejects foreign origins, oversized bodies and wrong content type
       'content-type': 'text/plain',
       'x-forwarded-for': '203.0.113.12',
     },
-  }, typeResponse, { scope: 'type-test' })
+  }, typeResponse, { scope: 'type-test', maxBodyBytes: 128 })
   assert.equal(wrongType.ok, false)
   assert.equal(typeResponse.state.statusCode, 415)
 })
