@@ -15,6 +15,7 @@ const expect = (condition, message) => {
 const requiredFiles = [
   'src/RootApp.jsx',
   'src/accessibility.css',
+  'src/requestLifecycle.js',
   'src/AudioStudioPro.jsx',
   'src/ConversationCoach.jsx',
   'src/TeamCoach.jsx',
@@ -65,6 +66,21 @@ expect(rootApp.includes('MotionConfig reducedMotion="user"'), 'Framer Motion mus
 expect(rootApp.includes("event.key !== 'Escape'"), 'full-screen training views must support Escape to close')
 expect(rootApp.includes('data-focus-key="coach"'), 'launcher focus restoration keys are missing')
 expect(rootApp.includes('aria-live="polite"'), 'view changes must be announced to assistive technology')
+expect(rootApp.includes("import { abortActiveRequests } from './requestLifecycle.js'"), 'RootApp must import request cancellation')
+expect(rootApp.includes('abortActiveRequests()'), 'RootApp must abort active requests when views close or change')
+expect(rootApp.includes("window.addEventListener('pagehide'"), 'active requests must be cancelled when the page is hidden')
+
+const requestLifecycle = read('src/requestLifecycle.js')
+expect(requestLifecycle.includes('new AbortController()'), 'request lifecycle must use AbortController')
+expect(requestLifecycle.includes('activeControllers'), 'request lifecycle must track active controllers')
+expect(requestLifecycle.includes('abortActiveRequests'), 'request lifecycle must expose bulk cancellation')
+
+for (const service of ['src/coachService.js', 'src/teamCoachService.js', 'src/serverTranscription.js']) {
+  const content = read(service)
+  expect(content.includes("from './requestLifecycle.js'"), `${service} must use the shared request lifecycle`)
+  expect(content.includes('createTrackedRequest('), `${service} must register cancellable requests`)
+  expect(content.includes('tracked.release()'), `${service} must release request tracking after completion`)
+}
 
 const accessibilityCss = read('src/accessibility.css')
 expect(accessibilityCss.includes(':focus-visible'), 'global visible keyboard focus styling is missing')
@@ -125,6 +141,7 @@ for (const requiredHeader of ['X-Content-Type-Options', 'X-Frame-Options', 'Refe
 const sourceFiles = [
   'src/RootApp.jsx',
   'src/AudioStudioPro.jsx',
+  'src/requestLifecycle.js',
   'src/cloud/cloudSync.js',
   'src/cloud/supabaseClient.js',
   'api/_security.js',
@@ -151,7 +168,10 @@ const syntaxFiles = [
   'scripts/validate-production-env.mjs',
   'src/audioAnalysis.js',
   'src/pitchAnalysis.js',
+  'src/requestLifecycle.js',
   'src/serverTranscription.js',
+  'src/coachService.js',
+  'src/teamCoachService.js',
   'src/trainingPlanEngine.js',
   'src/trainingPlanStore.js',
 ]
