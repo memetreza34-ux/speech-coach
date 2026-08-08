@@ -224,7 +224,7 @@ Mit Wegwerf-Testkonto prüfen:
 - Konto ist danach nicht mehr anmeldbar
 - zugehörige SpeechCoach-Zeilen sind durch Cascade entfernt
 
-## 11. Fehler- und Offline-Verhalten
+## 11. Fehler-, Offline- und Abbruchverhalten
 
 Gezielt testen:
 
@@ -237,6 +237,13 @@ Gezielt testen:
 - Browser ohne Speech Recognition
 - Browser ohne MediaRecorder
 - Präzisionstranskription schlägt fehl
+- Live-Coach-Antwort absenden und die Ansicht während der laufenden KI-Anfrage per Schließen oder Escape verlassen; die Anfrage wird abgebrochen und keine verspätete Coach-Antwort erscheint
+- Team-Coach-Antwort absenden und die Ansicht während der laufenden KI-Anfrage verlassen; die Anfrage wird abgebrochen und keine verspätete Team-Antwort erscheint
+- Audio-Labor während einer noch offenen Mikrofonfreigabe verlassen; ein später erteilter Zugriff darf keine Aufnahme mehr starten
+- Audio-Labor während Pitch-/Präzisionsanalyse verlassen; Präzisionstranskription wird abgebrochen und es darf keine nachträgliche Audio-Session gespeichert werden
+- Audio-Labor während Aufnahme verlassen; MediaRecorder, Speech Recognition, MediaStream und AudioContext werden beendet
+- nach einem abgebrochenen Coach-, Team- oder Audio-Vorgang denselben Modus erneut öffnen und erfolgreich neu starten
+- Seite während einer laufenden AI-Anfrage verlassen oder neu laden; aktive Requests werden über den Lifecycle abgebrochen
 - absichtlich ausgelöster React-Renderfehler in einer lokalen Testversion zeigt die Error Boundary statt einer weißen Seite
 - Neuladen nach Fehler stellt die Anwendung wieder her
 
@@ -278,4 +285,5 @@ Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 10. kritische Mobile- und Desktop-Flows manuell geprüft sind.
 11. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
 12. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
-13. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
+13. die Abbruch-/Race-Condition-Tests aus Abschnitt 11 auf echter Browser-Hardware erfolgreich sind.
+14. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
