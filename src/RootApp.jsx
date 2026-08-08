@@ -94,9 +94,22 @@ function SpeechCoachExperience() {
 
   useEffect(() => {
     const abortOnPageHide = () => abortActiveRequests()
+    const abortOnInternalBack = (event) => {
+      const target = event.target instanceof Element ? event.target : null
+      const backButton = target?.closest('button[aria-label="Zurück"]')
+      if (backButton?.closest('.coach-overlay, .team-overlay, .audio-lab-overlay')) abortActiveRequests()
+    }
+    const ignoreExpectedAbortRejection = (event) => {
+      if (event.reason?.name === 'AbortError') event.preventDefault()
+    }
+
     window.addEventListener('pagehide', abortOnPageHide)
+    window.addEventListener('unhandledrejection', ignoreExpectedAbortRejection)
+    document.addEventListener('click', abortOnInternalBack, true)
     return () => {
       window.removeEventListener('pagehide', abortOnPageHide)
+      window.removeEventListener('unhandledrejection', ignoreExpectedAbortRejection)
+      document.removeEventListener('click', abortOnInternalBack, true)
       abortActiveRequests()
     }
   }, [])
