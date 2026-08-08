@@ -29,6 +29,7 @@ const requiredFiles = [
   'docs/ACCESSIBILITY.md',
   'docs/API_SECURITY.md',
   'docs/DEPLOYMENT.md',
+  'docs/PITCH_CALIBRATION.md',
   'docs/PRODUCTION_CHECKLIST.md',
   'scripts/deployment-smoke.mjs',
   'scripts/validate-production-env.mjs',
@@ -59,6 +60,11 @@ expect(accessibilityDocs.includes('Nur Tastatur'), 'accessibility documentation 
 expect(accessibilityDocs.includes('Screenreader'), 'accessibility documentation must retain real screenreader testing')
 expect(accessibilityDocs.includes('Nicht behaupten ohne echten Test'), 'accessibility documentation must not overstate compliance')
 
+const pitchDocs = read('docs/PITCH_CALIBRATION.md')
+expect(pitchDocs.includes('Isolierte Oktavsprünge'), 'pitch documentation must describe isolated octave correction')
+expect(pitchDocs.includes('analysisConfidence'), 'pitch documentation must describe measurement confidence')
+expect(pitchDocs.includes('Manuelle Kalibrierung vor Release'), 'pitch documentation must retain real-device calibration')
+
 const rootApp = read('src/RootApp.jsx')
 expect(rootApp.includes("import AudioStudio from './AudioStudioPro.jsx'"), 'AudioStudioPro is not the active audio studio')
 expect(rootApp.includes("import TeamCoach from './TeamCoach.jsx'"), 'TeamCoach is not wired into RootApp')
@@ -83,6 +89,23 @@ for (const service of ['src/coachService.js', 'src/teamCoachService.js', 'src/se
   expect(content.includes('createTrackedRequest('), `${service} must register cancellable requests`)
   expect(content.includes('tracked.release()'), `${service} must release request tracking after completion`)
 }
+
+const pitchAnalysis = read('src/pitchAnalysis.js')
+expect(pitchAnalysis.includes('export const stabilizePitchPoints'), 'pitch analysis must expose deterministic curve stabilization')
+expect(pitchAnalysis.includes('export const summarizePitchPoints'), 'pitch analysis must expose deterministic pitch summarization')
+expect(pitchAnalysis.includes('correctIsolatedOctaveJumps'), 'pitch analysis must correct isolated octave tracking errors')
+expect(pitchAnalysis.includes('medianWindow'), 'pitch analysis must smooth small pitch jitter before melody scoring')
+expect(pitchAnalysis.includes('analysisConfidence'), 'pitch analysis must expose measurement confidence')
+expect(pitchAnalysis.includes('voicedFrameRatio'), 'pitch analysis must expose voiced-frame coverage')
+expect(pitchAnalysis.includes('octaveCorrectionCount'), 'pitch analysis must expose octave correction diagnostics')
+expect(pitchAnalysis.includes('confidenceWeight'), 'combined audio scoring must reduce the influence of uncertain pitch data')
+expect(pitchAnalysis.includes('Math.abs(difference) < 0.55'), 'melody direction changes must ignore small frame jitter')
+
+const coreTests = read('tests/core.test.mjs')
+expect(coreTests.includes('pitch stabilization removes an isolated octave error'), 'unit tests must protect octave-jump correction')
+expect(coreTests.includes('expressive pitch movement scores above a near-flat jitter curve'), 'unit tests must distinguish expressive movement from jitter')
+expect(coreTests.includes('pitch confidence reflects correlation quality and voiced coverage'), 'unit tests must protect pitch confidence behavior')
+expect(coreTests.includes('uncertain pitch has less influence on the combined audio score'), 'unit tests must protect confidence-weighted audio scoring')
 
 const accessibilityCss = read('src/accessibility.css')
 expect(accessibilityCss.includes(':focus-visible'), 'global visible keyboard focus styling is missing')
@@ -137,6 +160,10 @@ const apiSecurityDocs = read('docs/API_SECURITY.md')
 expect(apiSecurityDocs.includes('Produktions-WAF'), 'API security documentation must require a production WAF/distributed limiter')
 expect(apiSecurityDocs.includes('keine globale Rate-Limit-Garantie'), 'API security docs must state the in-memory limiter limitation')
 
+const productionChecklist = read('docs/PRODUCTION_CHECKLIST.md')
+expect(productionChecklist.includes('docs/PITCH_CALIBRATION.md'), 'production checklist must require real pitch calibration')
+expect(productionChecklist.includes('analysisConfidence'), 'production checklist must verify confidence-weighted pitch behavior')
+
 const health = read('api/health.js')
 expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
 expect(health.includes("response.setHeader('Cache-Control', 'no-store, max-age=0')"), 'health endpoint must disable caching')
@@ -151,6 +178,7 @@ for (const requiredHeader of ['X-Content-Type-Options', 'X-Frame-Options', 'Refe
 const sourceFiles = [
   'src/RootApp.jsx',
   'src/AudioStudioPro.jsx',
+  'src/pitchAnalysis.js',
   'src/requestLifecycle.js',
   'src/cloud/cloudSync.js',
   'src/cloud/supabaseClient.js',
