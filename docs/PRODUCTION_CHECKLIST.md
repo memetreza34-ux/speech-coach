@@ -22,6 +22,8 @@ Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 
 ## 2. Deployment
 
+Die vollständige Deployment-Anleitung liegt unter `docs/DEPLOYMENT.md`.
+
 - finale HTTPS-Domain festlegen
 - `OPENAI_API_KEY` ausschließlich serverseitig konfigurieren
 - optional `OPENAI_MODEL` serverseitig setzen
@@ -33,6 +35,43 @@ Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 - Security-Header im Browser-Netzwerk-Tab prüfen
 - statische `/assets/*` müssen langfristig gecacht werden
 - `/api/*` darf nicht gecacht werden
+
+### Production-Environment validieren
+
+Vor Preview-/Production-Freigabe:
+
+```bash
+npm run check:env
+```
+
+Dabei müssen mindestens `SPEECHCOACH_PRODUCTION_URL`, `OPENAI_API_KEY`, `VITE_SUPABASE_URL` und ein Frontend-sicherer Supabase Publishable-/Anon-Key in der Umgebung vorhanden sein. `VITE_OPENAI_API_KEY` muss fehlen.
+
+### Remote Deployment Smoke
+
+Nach einem Preview-Deployment:
+
+```bash
+SPEECHCOACH_TARGET_URL=https://preview.example.vercel.app \
+EXPECT_AI_CONFIGURED=true \
+npm run test:deployment
+```
+
+Nach dem Production-Deployment denselben Test erneut gegen die finale Production-URL ausführen.
+
+Der Remote-Smoke muss vollständig grün sein und prüft von außen unter anderem:
+
+- Startseite und React-Root
+- Security-/HSTS-Header
+- gebaute Assets und Immutable-Caching
+- `/api/health`
+- AI-Konfigurationsstatus, wenn `EXPECT_AI_CONFIGURED=true`
+- 405/Allow-Header auf geschützten APIs
+- Request-IDs und `no-store`
+- fremder Origin -> 403
+- falscher Content-Type -> 415
+- zu großer Request -> 413
+
+Für geschützte Vercel-Previews unterstützt das Script `VERCEL_AUTOMATION_BYPASS_SECRET`. Der manuelle GitHub-Workflow `.github/workflows/deployment-smoke.yml` kann denselben Test ausführen.
 
 ### API-Missbrauchsschutz
 
@@ -243,11 +282,14 @@ Mindestens prüfen:
 Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 
 1. `npm run check` erfolgreich durchläuft.
-2. die produktive HTTPS-Domain konfiguriert ist.
-3. Auth-End-to-End mit einem Testkonto funktioniert.
-4. beide Coach-Endpunkte mit echtem API-Key getestet sind.
-5. `/api/transcribe` mit echter Aufnahme getestet ist.
-6. Cloud-Sync auf zwei Geräten geprüft ist.
-7. Konto- und Datenlöschung mit einem Wegwerf-Testkonto geprüft ist.
-8. kritische Mobile- und Desktop-Flows manuell geprüft sind.
-9. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
+2. `npm run check:env` mit der vorgesehenen Production-Konfiguration erfolgreich durchläuft.
+3. ein echtes Preview-Deployment vorhanden ist und `npm run test:deployment` dagegen vollständig grün ist.
+4. die produktive HTTPS-Domain konfiguriert ist.
+5. Auth-End-to-End mit einem Testkonto funktioniert.
+6. beide Coach-Endpunkte mit echtem API-Key getestet sind.
+7. `/api/transcribe` mit echter Aufnahme getestet ist.
+8. Cloud-Sync auf zwei Geräten geprüft ist.
+9. Konto- und Datenlöschung mit einem Wegwerf-Testkonto geprüft ist.
+10. kritische Mobile- und Desktop-Flows manuell geprüft sind.
+11. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
+12. nach dem Production-Deployment `npm run test:deployment` auch gegen die finale Production-URL vollständig grün ist.
