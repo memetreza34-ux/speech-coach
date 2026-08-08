@@ -79,7 +79,7 @@ const offlineWithDiagnostics = (payload, diagnostics = {}) => ({
   retryAfterSeconds: diagnostics.retryAfterSeconds || null,
 })
 
-export const requestTeamCoachTurn = async (payload) => {
+export const requestTeamCoachTurn = async (payload, { signal } = {}) => {
   try {
     const response = await fetch('/api/team-coach', {
       method: 'POST',
@@ -100,6 +100,7 @@ export const requestTeamCoachTurn = async (payload) => {
           speakerId: message.speakerId || null,
         })),
       }),
+      signal,
     })
 
     const result = await response.json().catch(() => ({}))
@@ -114,7 +115,8 @@ export const requestTeamCoachTurn = async (payload) => {
 
     if (!result?.reply || !result?.scores || !result?.speakerId) return offlineWithDiagnostics(payload, { fallbackReason: 'invalid-response', requestId })
     return { ...result, source: 'ai', requestId }
-  } catch {
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error
     return offlineWithDiagnostics(payload, { fallbackReason: 'network' })
   }
 }
