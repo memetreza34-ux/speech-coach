@@ -1,3 +1,5 @@
+import { createTrackedRequest } from './requestLifecycle.js'
+
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024
 
 const blobToBase64 = async (blob) => {
@@ -50,32 +52,37 @@ export const requestServerTranscription = async (blob, { topic = '', language = 
     throw new Error('Die Aufnahme ist für die optionale Präzisionstranskription zu groß. Die lokale Analyse bleibt verfügbar.')
   }
 
-  const audioBase64 = await blobToBase64(blob)
-  if (signal?.aborted) throw new DOMException('Transkription abgebrochen.', 'AbortError')
+  const tracked = createTrackedRequest(signal)
+  try {
+    const audioBase64 = await blobToBase64(blob)
+    if (tracked.signal.aborted) throw tracked.signal.reason || new DOMException('Transkription abgebrochen.', 'AbortError')
 
-  const response = await fetch('/api/transcribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      audioBase64,
-      mimeType: blob.type || 'audio/webm',
-      language,
-      context: String(topic || '').slice(0, 300),
-    }),
-    signal,
-  })
+    const response = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audioBase64,
+        mimeType: blob.type || 'audio/webm',
+        language,
+        context: String(topic || '').slice(0, 300),
+      }),
+      signal: tracked.signal,
+    })
 
-  const result = await response.json().catch(() => ({}))
-  if (!response.ok) throw buildTranscriptionError(response, result)
-  if (!result?.text) throw new Error('Der Transkriptionsdienst hat keinen Text geliefert.')
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw buildTranscriptionError(response, result)
+    if (!result?.text) throw new Error('Der Transkriptionsdienst hat keinen Text geliefert.')
 
-  return {
-    text: result.text,
-    language: result.language || language,
-    duration: Number(result.duration) || null,
-    words: Array.isArray(result.words) ? result.words : [],
-    timestampGroups: groupTimestampWords(result.words),
-    model: result.model || 'whisper-1',
-    requestId: response.headers.get('x-request-id') || result.requestId || null,
+    return {
+      text: result.text,
+      language: result.language || language,
+      duration: Number(result.duration) || null,
+      words: Array.isArray(result.words) ? result.words : [],
+      timestampGroups: groupTimestampWords(result.words),
+      model: result.model || 'whisper-1',
+      requestId: response.headers.get('x-request-id') || result.requestId || null,
+    }
+  } finally {
+    tracked.release()
   }
 }
