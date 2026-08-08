@@ -1,6 +1,7 @@
 const rawTarget = process.env.SPEECHCOACH_TARGET_URL || process.argv[2]
 const expectAiConfigured = ['1', 'true', 'yes'].includes(String(process.env.EXPECT_AI_CONFIGURED || '').toLowerCase())
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS) || 12_000
+const vercelBypassSecret = String(process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '').trim()
 
 if (!rawTarget) {
   console.error('Usage: SPEECHCOACH_TARGET_URL=https://speechcoach.example npm run test:deployment')
@@ -32,11 +33,16 @@ target.hash = ''
 const failures = []
 const passes = []
 const base = target.toString().replace(/\/$/, '')
+const automationHeaders = vercelBypassSecret
+  ? { 'x-vercel-protection-bypass': vercelBypassSecret }
+  : {}
 
 const check = (condition, label, detail = '') => {
   if (condition) passes.push(label)
   else failures.push(detail ? `${label}: ${detail}` : label)
 }
+
+const mergedHeaders = (headers = {}) => ({ ...automationHeaders, ...headers })
 
 const request = async (pathname, options = {}) => {
   const controller = new AbortController()
@@ -45,6 +51,7 @@ const request = async (pathname, options = {}) => {
     return await fetch(`${base}${pathname}`, {
       redirect: 'manual',
       ...options,
+      headers: mergedHeaders(options.headers),
       signal: controller.signal,
     })
   } finally {
@@ -75,7 +82,10 @@ check(/<div[^>]+id=["']root["']/.test(html), 'React-Root ist im HTML vorhanden')
 const assetMatch = html.match(/(?:src|href)=["']([^"']*\/assets\/[^"']+\.(?:js|css))["']/)
 if (assetMatch) {
   const assetUrl = new URL(assetMatch[1], `${base}/`)
-  const assetResponse = await fetch(assetUrl, { signal: AbortSignal.timeout(timeoutMs) })
+  const assetResponse = await fetch(assetUrl, {
+    headers: automationHeaders,
+    signal: AbortSignal.timeout(timeoutMs),
+  })
   const cache = assetResponse.headers.get('cache-control') || ''
   check(assetResponse.ok, 'Gebautes Asset ist erreichbar', `Status ${assetResponse.status}`)
   check(/immutable/i.test(cache) && /max-age=31536000/i.test(cache), 'Gebautes Asset wird immutable gecacht', cache || 'kein Cache-Control')
