@@ -115,7 +115,7 @@ const compressPitchTimeline = (points, maximum = 120) => {
 
 const medianWindow = (values, radius = 2) => values.map((value, index) => {
   const window = values.slice(Math.max(0, index - radius), Math.min(values.length, index + radius + 1))
-  return percentile(window, 0.5) || value
+  return window.length ? percentile(window, 0.5) : value
 })
 
 const correctIsolatedOctaveJumps = (points) => {
