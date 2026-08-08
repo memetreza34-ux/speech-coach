@@ -14,6 +14,7 @@ const expect = (condition, message) => {
 
 const requiredFiles = [
   'src/RootApp.jsx',
+  'src/accessibility.css',
   'src/AudioStudioPro.jsx',
   'src/ConversationCoach.jsx',
   'src/TeamCoach.jsx',
@@ -54,6 +55,15 @@ expect(deploymentRunbook.includes('Supabase Auth URL Configuration'), 'deploymen
 const rootApp = read('src/RootApp.jsx')
 expect(rootApp.includes("import AudioStudio from './AudioStudioPro.jsx'"), 'AudioStudioPro is not the active audio studio')
 expect(rootApp.includes("import TeamCoach from './TeamCoach.jsx'"), 'TeamCoach is not wired into RootApp')
+expect(rootApp.includes('MotionConfig reducedMotion="user"'), 'Framer Motion must respect the user reduced-motion preference')
+expect(rootApp.includes("event.key !== 'Escape'"), 'full-screen training views must support Escape to close')
+expect(rootApp.includes('data-focus-key="coach"'), 'launcher focus restoration keys are missing')
+expect(rootApp.includes('aria-live="polite"'), 'view changes must be announced to assistive technology')
+
+const accessibilityCss = read('src/accessibility.css')
+expect(accessibilityCss.includes(':focus-visible'), 'global visible keyboard focus styling is missing')
+expect(accessibilityCss.includes('@media (prefers-reduced-motion: reduce)'), 'CSS reduced-motion fallback is missing')
+expect(accessibilityCss.includes('min-width: 44px'), 'coarse-pointer icon targets must retain a 44px minimum size')
 
 const main = read('src/main.jsx')
 expect(main.includes('ErrorBoundary'), 'global ErrorBoundary is not mounted')
