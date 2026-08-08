@@ -20,9 +20,9 @@ npm run check
 
 Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 
-## 2. Deployment
+Zusätzlich enthält `docs/ACCESSIBILITY.md` die verbindliche Keyboard-, Screenreader-, Reduced-Motion- und Mobile-Prüfung. Automatische Sourcechecks ersetzen diese reale Bedienprüfung nicht.
 
-Die vollständige Deployment-Anleitung liegt unter `docs/DEPLOYMENT.md`.
+## 2. Deployment
 
 - finale HTTPS-Domain festlegen
 - `OPENAI_API_KEY` ausschließlich serverseitig konfigurieren
@@ -36,42 +36,21 @@ Die vollständige Deployment-Anleitung liegt unter `docs/DEPLOYMENT.md`.
 - statische `/assets/*` müssen langfristig gecacht werden
 - `/api/*` darf nicht gecacht werden
 
-### Production-Environment validieren
+### Deployment-Smoke
 
-Vor Preview-/Production-Freigabe:
+Vor einer Freigabe müssen beide Remote-Smoke-Stufen erfolgreich sein:
 
-```bash
-npm run check:env
-```
+1. Preview-Deployment
+2. Production-Deployment
 
-Dabei müssen mindestens `SPEECHCOACH_PRODUCTION_URL`, `OPENAI_API_KEY`, `VITE_SUPABASE_URL` und ein Frontend-sicherer Supabase Publishable-/Anon-Key in der Umgebung vorhanden sein. `VITE_OPENAI_API_KEY` muss fehlen.
-
-### Remote Deployment Smoke
-
-Nach einem Preview-Deployment:
+Ausführen mit:
 
 ```bash
-SPEECHCOACH_TARGET_URL=https://preview.example.vercel.app \
-EXPECT_AI_CONFIGURED=true \
-npm run test:deployment
+SPEECHCOACH_TARGET_URL=https://preview.example npm run test:deployment
+SPEECHCOACH_TARGET_URL=https://production.example EXPECT_AI_CONFIGURED=true npm run test:deployment
 ```
 
-Nach dem Production-Deployment denselben Test erneut gegen die finale Production-URL ausführen.
-
-Der Remote-Smoke muss vollständig grün sein und prüft von außen unter anderem:
-
-- Startseite und React-Root
-- Security-/HSTS-Header
-- gebaute Assets und Immutable-Caching
-- `/api/health`
-- AI-Konfigurationsstatus, wenn `EXPECT_AI_CONFIGURED=true`
-- 405/Allow-Header auf geschützten APIs
-- Request-IDs und `no-store`
-- fremder Origin -> 403
-- falscher Content-Type -> 415
-- zu großer Request -> 413
-
-Für geschützte Vercel-Previews unterstützt das Script `VERCEL_AUTOMATION_BYPASS_SECRET`. Der manuelle GitHub-Workflow `.github/workflows/deployment-smoke.yml` kann denselben Test ausführen.
+Bei geschütztem Vercel-Preview zusätzlich `VERCEL_AUTOMATION_BYPASS_SECRET` verwenden.
 
 ### API-Missbrauchsschutz
 
@@ -263,6 +242,8 @@ Gezielt testen:
 
 ## 12. Responsive und Accessibility
 
+Die Detailprüfung steht zusätzlich unter `docs/ACCESSIBILITY.md`.
+
 Mindestens prüfen:
 
 - 360 px Smartphone
@@ -270,11 +251,15 @@ Mindestens prüfen:
 - Tablet
 - 1366 px Desktop
 - großer Desktop
-- Tastaturbedienung wichtiger Buttons
-- sichtbare Fokuszustände
-- Dialoge sinnvoll per Screenreader benannt
+- alle sechs Launcher nur mit Tastatur öffnen
+- aktive Vollbildansicht mit Escape schließen
+- Fokus kehrt auf den ursprünglichen Launcher zurück
+- sichtbare Fokuszustände auf Buttons, Links und Formularfeldern
+- Dialog-/Ansichtswechsel wird vom eingesetzten Screenreader nachvollziehbar angekündigt
+- Screenreader-Namen für zentrale Icon-Aktionen
 - keine abgeschnittenen Hauptaktionen
-- `prefers-reduced-motion` ohne kritische Funktionsverluste
+- `prefers-reduced-motion: reduce` ohne kritische Funktionsverluste
+- zentrale Touch-Icon-Aktionen auf grobem Pointer mindestens 44 × 44 px
 - ausreichende Textkontraste
 
 ## Release-Gate
@@ -282,8 +267,8 @@ Mindestens prüfen:
 Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 
 1. `npm run check` erfolgreich durchläuft.
-2. `npm run check:env` mit der vorgesehenen Production-Konfiguration erfolgreich durchläuft.
-3. ein echtes Preview-Deployment vorhanden ist und `npm run test:deployment` dagegen vollständig grün ist.
+2. `npm run check:env` mit der echten Production-Konfiguration erfolgreich durchläuft.
+3. der Remote-Smoke gegen ein echtes Preview-Deployment erfolgreich ist.
 4. die produktive HTTPS-Domain konfiguriert ist.
 5. Auth-End-to-End mit einem Testkonto funktioniert.
 6. beide Coach-Endpunkte mit echtem API-Key getestet sind.
@@ -291,5 +276,6 @@ Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 8. Cloud-Sync auf zwei Geräten geprüft ist.
 9. Konto- und Datenlöschung mit einem Wegwerf-Testkonto geprüft ist.
 10. kritische Mobile- und Desktop-Flows manuell geprüft sind.
-11. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
-12. nach dem Production-Deployment `npm run test:deployment` auch gegen die finale Production-URL vollständig grün ist.
+11. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
+12. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
+13. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
