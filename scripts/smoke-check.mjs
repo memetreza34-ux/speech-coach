@@ -69,6 +69,8 @@ expect(rootApp.includes('aria-live="polite"'), 'view changes must be announced t
 expect(rootApp.includes("import { abortActiveRequests } from './requestLifecycle.js'"), 'RootApp must import request cancellation')
 expect(rootApp.includes('abortActiveRequests()'), 'RootApp must abort active requests when views close or change')
 expect(rootApp.includes("window.addEventListener('pagehide'"), 'active requests must be cancelled when the page is hidden')
+expect(rootApp.includes('button[aria-label="Zurück"]'), 'internal back navigation must cancel tracked requests')
+expect(rootApp.includes("window.addEventListener('unhandledrejection'"), 'expected AbortError navigation cancellations must be handled centrally')
 
 const requestLifecycle = read('src/requestLifecycle.js')
 expect(requestLifecycle.includes('new AbortController()'), 'request lifecycle must use AbortController')
