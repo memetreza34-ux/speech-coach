@@ -16,6 +16,8 @@ const deviation = (values) => {
 }
 
 const hzToSemitone = (hz, reference = 110) => 12 * Math.log2(hz / reference)
+const semitoneToHz = (semitone, reference = 110) => reference * (2 ** (semitone / 12))
+const semitoneDistance = (leftHz, rightHz) => Math.abs(12 * Math.log2(leftHz / rightHz))
 
 const downsample = (samples, sourceRate, targetRate = 8000) => {
   if (sourceRate <= targetRate) return { samples, sampleRate: sourceRate }
@@ -111,12 +113,67 @@ const compressPitchTimeline = (points, maximum = 120) => {
   return compressed
 }
 
+const medianWindow = (values, radius = 2) => values.map((value, index) => {
+  const window = values.slice(Math.max(0, index - radius), Math.min(values.length, index + radius + 1))
+  return percentile(window, 0.5) || value
+})
+
+const correctIsolatedOctaveJumps = (points) => {
+  if (points.length < 3) return points.map((point) => ({ ...point, octaveCorrected: false }))
+
+  return points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return { ...point, octaveCorrected: false }
+    const previous = points[index - 1]
+    const next = points[index + 1]
+    if (semitoneDistance(previous.hz, next.hz) > 3.5) return { ...point, octaveCorrected: false }
+
+    const localReference = Math.sqrt(previous.hz * next.hz)
+    const originalDistance = semitoneDistance(point.hz, localReference)
+    if (originalDistance < 7) return { ...point, octaveCorrected: false }
+
+    const candidates = [point.hz * 0.5, point.hz * 2]
+      .filter((hz) => hz >= 65 && hz <= 420)
+      .map((hz) => ({ hz, distance: semitoneDistance(hz, localReference) }))
+      .sort((left, right) => left.distance - right.distance)
+    const best = candidates[0]
+
+    if (!best || best.distance > 3.5 || originalDistance - best.distance < 6) {
+      return { ...point, octaveCorrected: false }
+    }
+
+    return { ...point, hz: best.hz, octaveCorrected: true }
+  })
+}
+
+export const stabilizePitchPoints = (points) => {
+  const valid = (Array.isArray(points) ? points : [])
+    .filter((point) => Number.isFinite(point?.hz) && point.hz >= 65 && point.hz <= 420)
+    .map((point) => ({
+      timeMs: Number(point.timeMs) || 0,
+      hz: Number(point.hz),
+      confidence: clamp(Number(point.confidence) || 0, 0, 1),
+    }))
+
+  if (!valid.length) return []
+
+  const corrected = correctIsolatedOctaveJumps(valid)
+  const referenceHz = percentile(corrected.map((point) => point.hz), 0.5)
+  const rawSemitones = corrected.map((point) => hzToSemitone(point.hz, referenceHz))
+  const smoothedSemitones = medianWindow(rawSemitones, 2)
+
+  return corrected.map((point, index) => ({
+    ...point,
+    hz: semitoneToHz(smoothedSemitones[index], referenceHz),
+    semitone: smoothedSemitones[index],
+  }))
+}
+
 const countDirectionChanges = (values) => {
   let previousDirection = 0
   let changes = 0
   for (let index = 1; index < values.length; index += 1) {
     const difference = values[index] - values[index - 1]
-    if (Math.abs(difference) < 0.35) continue
+    if (Math.abs(difference) < 0.55) continue
     const direction = Math.sign(difference)
     if (previousDirection && direction !== previousDirection) changes += 1
     previousDirection = direction
@@ -148,6 +205,88 @@ const scoreMelody = (directionChanges, durationMs, variationSemitones) => {
       : clamp(96 - (changesPerMinute - 22) * 1.6, 58, 96)
   const variationScore = clamp(45 + variationSemitones * 20, 45, 96)
   return Math.round(movementScore * 0.6 + variationScore * 0.4)
+}
+
+const pitchQualityLabel = (confidence) => confidence >= 75 ? 'high' : confidence >= 55 ? 'medium' : 'low'
+
+export const summarizePitchPoints = (rawPoints, { durationMs = 0, totalFrameCount = 0 } = {}) => {
+  if (!Array.isArray(rawPoints) || rawPoints.length < 5) return {
+    available: false,
+    reason: 'Zu wenig stabile stimmhafte Abschnitte für eine Tonhöhenanalyse.',
+    timeline: [],
+    scores: { intonation: 0, melody: 0 },
+    analysisConfidence: 0,
+    voicedFrameRatio: 0,
+    quality: 'low',
+  }
+
+  const stablePoints = stabilizePitchPoints(rawPoints)
+  if (stablePoints.length < 5) return {
+    available: false,
+    reason: 'Das Tonhöhensignal war für eine stabile Auswertung zu unklar.',
+    timeline: [],
+    scores: { intonation: 0, melody: 0 },
+    analysisConfidence: 0,
+    voicedFrameRatio: 0,
+    quality: 'low',
+  }
+
+  const frequencies = stablePoints.map((point) => point.hz)
+  const medianPitchHz = percentile(frequencies, 0.5)
+  const lowPitchHz = percentile(frequencies, 0.1)
+  const highPitchHz = percentile(frequencies, 0.9)
+  const semitones = stablePoints.map((point) => hzToSemitone(point.hz, medianPitchHz))
+  const pitchRangeSemitones = highPitchHz > lowPitchHz ? 12 * Math.log2(highPitchHz / lowPitchHz) : 0
+  const pitchVariationSemitones = deviation(semitones)
+  const directionChanges = countDirectionChanges(semitones)
+  const averageConfidence = average(rawPoints.map((point) => Number(point.confidence) || 0))
+  const voicedFrameRatio = totalFrameCount > 0 ? clamp(rawPoints.length / totalFrameCount, 0, 1) : 1
+  const octaveCorrectionCount = stablePoints.filter((point) => point.octaveCorrected).length
+  const correlationQuality = clamp(((averageConfidence - 0.56) / 0.28) * 100, 0, 100)
+  const coverageQuality = clamp((voicedFrameRatio / 0.35) * 100, 0, 100)
+  const correctionPenalty = clamp((octaveCorrectionCount / stablePoints.length) * 100 * 1.5, 0, 25)
+  const analysisConfidence = clamp(Math.round((correlationQuality * 0.72) + (coverageQuality * 0.28) - correctionPenalty), 0, 100)
+  const scores = {
+    intonation: scoreIntonation(pitchRangeSemitones, pitchVariationSemitones),
+    melody: scoreMelody(directionChanges, durationMs, pitchVariationSemitones),
+  }
+  const monotonyRisk = clamp(Math.round(100 - ((scores.intonation * 0.6) + (scores.melody * 0.4))), 0, 100)
+  const timeline = compressPitchTimeline(stablePoints.map((point, index) => ({
+    timeMs: point.timeMs,
+    hz: Math.round(point.hz),
+    semitone: semitones[index],
+    confidence: point.confidence,
+  })))
+
+  const strengths = []
+  const improvements = []
+  if (scores.intonation >= 78) strengths.push('Deine Tonhöhe variierte deutlich genug, um Kernaussagen stimmlich zu markieren.')
+  else improvements.push('Variiere die Tonhöhe stärker zwischen Kernaussagen und Erläuterungen, statt auf einer ähnlichen Lage zu bleiben.')
+  if (scores.melody >= 76) strengths.push('Deine Sprechmelodie zeigte erkennbare Auf- und Abbewegungen.')
+  else improvements.push('Setze hörbare Tonhöhenbewegungen gezielter an Satzanfängen, Schlüsselwörtern und Abschlüssen ein.')
+  if (pitchRangeSemitones > 14) improvements.push('Der Tonhöhenumfang war sehr groß. Nutze starke Ausschläge gezielter, damit die Wirkung kontrolliert bleibt.')
+  if (analysisConfidence < 55) improvements.push('Die Tonhöhenerkennung war nur begrenzt stabil. Wiederhole die Aufnahme möglichst näher am Mikrofon und mit weniger Hintergrundgeräuschen.')
+
+  return {
+    available: true,
+    medianPitchHz: Math.round(medianPitchHz),
+    lowPitchHz: Math.round(lowPitchHz),
+    highPitchHz: Math.round(highPitchHz),
+    pitchRangeSemitones: Number(pitchRangeSemitones.toFixed(1)),
+    pitchVariationSemitones: Number(pitchVariationSemitones.toFixed(2)),
+    directionChanges,
+    voicedFrameCount: rawPoints.length,
+    voicedFrameRatio: Number(voicedFrameRatio.toFixed(3)),
+    averageConfidence: Number(averageConfidence.toFixed(3)),
+    analysisConfidence,
+    quality: pitchQualityLabel(analysisConfidence),
+    octaveCorrectionCount,
+    monotonyRisk,
+    timeline,
+    scores,
+    strengths: strengths.slice(0, 2),
+    improvements: improvements.slice(0, 2),
+  }
 }
 
 export const analysePitchFromBlob = async (blob) => {
@@ -185,56 +324,10 @@ export const analysePitchFromBlob = async (blob) => {
       })
     }
 
-    if (rawPoints.length < 5) return {
-      available: false,
-      reason: 'Zu wenig stabile stimmhafte Abschnitte für eine Tonhöhenanalyse.',
-      timeline: [],
-      scores: { intonation: 0, melody: 0 },
-    }
-
-    const frequencies = rawPoints.map((point) => point.hz)
-    const medianPitchHz = percentile(frequencies, 0.5)
-    const lowPitchHz = percentile(frequencies, 0.1)
-    const highPitchHz = percentile(frequencies, 0.9)
-    const semitones = rawPoints.map((point) => hzToSemitone(point.hz, medianPitchHz))
-    const pitchRangeSemitones = highPitchHz > lowPitchHz ? 12 * Math.log2(highPitchHz / lowPitchHz) : 0
-    const pitchVariationSemitones = deviation(semitones)
-    const directionChanges = countDirectionChanges(semitones)
-    const durationMs = decoded.duration * 1000
-    const scores = {
-      intonation: scoreIntonation(pitchRangeSemitones, pitchVariationSemitones),
-      melody: scoreMelody(directionChanges, durationMs, pitchVariationSemitones),
-    }
-    const monotonyRisk = clamp(Math.round(100 - ((scores.intonation * 0.6) + (scores.melody * 0.4))), 0, 100)
-    const timeline = compressPitchTimeline(rawPoints.map((point, index) => ({
-      ...point,
-      hz: Math.round(point.hz),
-      semitone: semitones[index],
-    })))
-
-    const strengths = []
-    const improvements = []
-    if (scores.intonation >= 78) strengths.push('Deine Tonhöhe variierte deutlich genug, um Kernaussagen stimmlich zu markieren.')
-    else improvements.push('Variiere die Tonhöhe stärker zwischen Kernaussagen und Erläuterungen, statt auf einer ähnlichen Lage zu bleiben.')
-    if (scores.melody >= 76) strengths.push('Deine Sprechmelodie zeigte erkennbare Auf- und Abbewegungen.')
-    else improvements.push('Setze hörbare Tonhöhenbewegungen gezielter an Satzanfängen, Schlüsselwörtern und Abschlüssen ein.')
-    if (pitchRangeSemitones > 14) improvements.push('Der Tonhöhenumfang war sehr groß. Nutze starke Ausschläge gezielter, damit die Wirkung kontrolliert bleibt.')
-
-    return {
-      available: true,
-      medianPitchHz: Math.round(medianPitchHz),
-      lowPitchHz: Math.round(lowPitchHz),
-      highPitchHz: Math.round(highPitchHz),
-      pitchRangeSemitones: Number(pitchRangeSemitones.toFixed(1)),
-      pitchVariationSemitones: Number(pitchVariationSemitones.toFixed(2)),
-      directionChanges,
-      voicedFrameCount: rawPoints.length,
-      monotonyRisk,
-      timeline,
-      scores,
-      strengths: strengths.slice(0, 2),
-      improvements: improvements.slice(0, 2),
-    }
+    return summarizePitchPoints(rawPoints, {
+      durationMs: decoded.duration * 1000,
+      totalFrameCount: rmsValues.length,
+    })
   } catch {
     return null
   } finally {
@@ -246,10 +339,14 @@ export const combineAudioAndPitchAnalysis = (audioAnalysis, pitchAnalysis) => {
   if (!pitchAnalysis?.available) return { ...audioAnalysis, pitch: pitchAnalysis || null }
 
   const loudnessDynamics = Number(audioAnalysis.scores?.dynamics) || 0
+  const confidenceWeight = clamp((pitchAnalysis.analysisConfidence || 50) / 100, 0.45, 1)
+  const pitchDynamics = Math.round(
+    pitchAnalysis.scores.intonation * 0.64
+    + pitchAnalysis.scores.melody * 0.36,
+  )
   const voiceDynamics = Math.round(
-    loudnessDynamics * 0.45
-    + pitchAnalysis.scores.intonation * 0.35
-    + pitchAnalysis.scores.melody * 0.2,
+    loudnessDynamics * (1 - (0.55 * confidenceWeight))
+    + pitchDynamics * (0.55 * confidenceWeight),
   )
   const scores = {
     ...audioAnalysis.scores,
@@ -258,14 +355,16 @@ export const combineAudioAndPitchAnalysis = (audioAnalysis, pitchAnalysis) => {
     intonation: pitchAnalysis.scores.intonation,
     melody: pitchAnalysis.scores.melody,
   }
-  const score = Math.round(
-    scores.energy * 0.18
-    + scores.dynamics * 0.24
-    + scores.pauses * 0.18
-    + scores.flow * 0.18
-    + scores.intonation * 0.12
-    + scores.melody * 0.1,
+  const pitchContribution = 0.22 * confidenceWeight
+  const baseContribution = 1 - pitchContribution
+  const baseScore = Math.round(
+    scores.energy * 0.23
+    + loudnessDynamics * 0.27
+    + scores.pauses * 0.23
+    + scores.flow * 0.27,
   )
+  const pitchScore = Math.round(scores.intonation * 0.55 + scores.melody * 0.45)
+  const score = Math.round((baseScore * baseContribution) + (pitchScore * pitchContribution))
 
   return {
     ...audioAnalysis,
