@@ -20,7 +20,7 @@ npm run check
 
 Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 
-Zusätzlich enthält `docs/ACCESSIBILITY.md` die verbindliche Keyboard-, Screenreader-, Reduced-Motion- und Mobile-Prüfung. Automatische Sourcechecks ersetzen diese reale Bedienprüfung nicht.
+Zusätzlich enthält `docs/ACCESSIBILITY.md` die verbindliche Keyboard-, Screenreader-, Reduced-Motion- und Mobile-Prüfung. `docs/PITCH_CALIBRATION.md` enthält die verbindliche reale Kalibrierung der lokalen Tonhöhenanalyse. Automatische Sourcechecks ersetzen diese realen Bedien- und Aufnahmeprüfungen nicht.
 
 ## 2. Deployment
 
@@ -162,6 +162,23 @@ Mit verschiedenen Mikrofonen und mindestens zwei unterschiedlichen Stimmen prüf
 - Monotonie-Risiko
 - Klick auf Pitch-Kurve springt an korrekte Audiostelle
 
+### Pitch-Kalibrierung
+
+Die Detailmatrix steht unter `docs/PITCH_CALIBRATION.md`.
+
+Vor Production mindestens prüfen:
+
+- bewusst monotone Aufnahme erzeugt weniger Pitch-Bewegung als eine expressive Vergleichsaufnahme derselben Person
+- kleine Frame-Jitterbewegungen erzeugen keine künstlich hohe Zahl an Richtungswechseln
+- einzelne ungefähr 2×-/0,5×-Oktavfehler dominieren Tonumfang oder Melodie nicht
+- ruhiger Raum liefert plausibel höheres Messvertrauen als eine deutlich schlechtere/rauschigere Aufnahme
+- geringer Mikrofonabstand und größerer Abstand werden verglichen
+- Laptop-/Desktop-Mikrofon und Smartphone-Mikrofon werden geprüft
+- mindestens eine tiefere und eine höhere Sprechstimme werden geprüft
+- bei geringer `analysisConfidence` beeinflussen Pitch-Werte den kombinierten Audio-Score sichtbar weniger stark
+- bei zu wenig stabilen stimmhaften Frames bleibt die übrige lokale Audioanalyse nutzbar
+- hörbarer Eindruck und angezeigte Kurve werden manuell miteinander verglichen
+
 ### Präzisionstranskription
 
 Mit WebM und – falls vom Zielbrowser erzeugt – MP4/M4A prüfen:
@@ -286,4 +303,5 @@ Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 11. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
 12. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
 13. die Abbruch-/Race-Condition-Tests aus Abschnitt 11 auf echter Browser-Hardware erfolgreich sind.
-14. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
+14. die reale Pitch-Kalibrierung aus `docs/PITCH_CALIBRATION.md` mit mehreren Stimmen/Mikrofonen erfolgreich durchgeführt und dokumentiert ist.
+15. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
