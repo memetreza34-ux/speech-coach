@@ -153,6 +153,9 @@ function Recorder({ configuration, onBack, onComplete }) {
   const startRef = useRef(0)
   const lastSampleRef = useRef(0)
   const completedRef = useRef(false)
+  const mountedRef = useRef(true)
+  const processingAbortRef = useRef(null)
+  const pendingAudioUrlRef = useRef(null)
 
   const updateStatus = (value) => { statusRef.current = value; setStatus(value) }
 
@@ -161,12 +164,50 @@ function Recorder({ configuration, onBack, onComplete }) {
     if (timerRef.current) clearInterval(timerRef.current)
     animationRef.current = null
     timerRef.current = null
-    try { recognitionRef.current?.abort() } catch { /* already inactive */ }
+
+    const recognition = recognitionRef.current
+    if (recognition) {
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      try { recognition.abort() } catch { /* already inactive */ }
+    }
+    recognitionRef.current = null
+
     streamRef.current?.getTracks().forEach((track) => track.stop())
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close().catch(() => {})
+    streamRef.current = null
+
+    const context = audioContextRef.current
+    if (context && context.state !== 'closed') context.close().catch(() => {})
+    audioContextRef.current = null
+    analyserRef.current = null
   }
 
-  useEffect(() => () => stopResources(), [])
+  const disposeRecorder = () => {
+    const recorder = recorderRef.current
+    if (!recorder) return
+    recorder.ondataavailable = null
+    recorder.onstop = null
+    try {
+      if (recorder.state !== 'inactive') recorder.stop()
+    } catch {
+      // Recorder can already be stopped by the browser.
+    }
+    recorderRef.current = null
+  }
+
+  useEffect(() => () => {
+    mountedRef.current = false
+    completedRef.current = true
+    processingAbortRef.current?.abort()
+    processingAbortRef.current = null
+    stopResources()
+    disposeRecorder()
+    if (pendingAudioUrlRef.current) {
+      URL.revokeObjectURL(pendingAudioUrlRef.current)
+      pendingAudioUrlRef.current = null
+    }
+  }, [])
 
   const finalize = async () => {
     if (completedRef.current) return
@@ -177,13 +218,26 @@ function Recorder({ configuration, onBack, onComplete }) {
     const mimeType = recorderRef.current?.mimeType || 'audio/webm'
     const blob = new Blob(chunksRef.current, { type: mimeType })
     const audioUrl = URL.createObjectURL(blob)
+    pendingAudioUrlRef.current = audioUrl
     const baseAnalysis = analyseAudioSamples(samplesRef.current, durationMs)
+    const processingController = new AbortController()
+    processingAbortRef.current = processingController
 
     const pitchPromise = analysePitchFromBlob(blob)
     const transcriptionPromise = configuration.precisionTranscript
-      ? requestServerTranscription(blob, { topic: configuration.topic, language: 'de' })
+      ? requestServerTranscription(blob, { topic: configuration.topic, language: 'de', signal: processingController.signal })
       : Promise.resolve(null)
     const [pitchResult, transcriptionResult] = await Promise.allSettled([pitchPromise, transcriptionPromise])
+    processingAbortRef.current = null
+
+    if (!mountedRef.current) {
+      if (pendingAudioUrlRef.current === audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+        pendingAudioUrlRef.current = null
+      }
+      return
+    }
+
     const pitch = pitchResult.status === 'fulfilled' ? pitchResult.value : null
     const preciseTranscription = transcriptionResult.status === 'fulfilled' ? transcriptionResult.value : null
     const transcriptionError = configuration.precisionTranscript && transcriptionResult.status === 'rejected'
@@ -208,6 +262,7 @@ function Recorder({ configuration, onBack, onComplete }) {
       pitchAnalysis: pitchSummaryForStorage(pitch),
     })
 
+    pendingAudioUrlRef.current = null
     onComplete({
       topic: configuration.topic,
       durationMs,
@@ -285,6 +340,10 @@ function Recorder({ configuration, onBack, onComplete }) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false, channelCount: 1 } })
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       streamRef.current = stream
       const Context = window.AudioContext || window.webkitAudioContext
       const context = new Context()
@@ -313,6 +372,7 @@ function Recorder({ configuration, onBack, onComplete }) {
       }, 100)
     } catch (captureError) {
       stopResources()
+      if (!mountedRef.current) return
       updateStatus('ready')
       if (captureError?.name === 'NotAllowedError') setError('Der Mikrofonzugriff wurde abgelehnt. Erlaube ihn in den Browser-Einstellungen.')
       else if (captureError?.name === 'NotFoundError') setError('Es wurde kein verfügbares Mikrofon gefunden.')
