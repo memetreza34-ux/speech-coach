@@ -185,11 +185,11 @@ export const readProgressData = () => {
   }
 
   const skills = {
-    pace: measuredSkills.pace ?? Number(baseline?.skills?.pace) || null,
-    fillerControl: measuredSkills.fillerControl ?? Number(baseline?.skills?.fillerControl) || null,
-    clarity: measuredSkills.clarity ?? Number(baseline?.skills?.clarity) || null,
-    structure: measuredSkills.structure ?? Number(baseline?.skills?.structure) || null,
-    impact: measuredSkills.impact ?? Number(baseline?.skills?.impact) || null,
+    pace: measuredSkills.pace ?? (Number(baseline?.skills?.pace) || null),
+    fillerControl: measuredSkills.fillerControl ?? (Number(baseline?.skills?.fillerControl) || null),
+    clarity: measuredSkills.clarity ?? (Number(baseline?.skills?.clarity) || null),
+    structure: measuredSkills.structure ?? (Number(baseline?.skills?.structure) || null),
+    impact: measuredSkills.impact ?? (Number(baseline?.skills?.impact) || null),
     voiceDynamics: measuredSkills.voiceDynamics,
     pauseControl: measuredSkills.pauseControl,
   }
