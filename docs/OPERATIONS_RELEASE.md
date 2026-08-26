@@ -19,6 +19,8 @@ Startgrenzen aus der aktuellen Architektur:
 - `/api/team-coach`: global ungefähr 18 Requests/Minute/IP
 - `/api/transcribe`: global ungefähr 8 Requests/Minute/IP
 
+Personalisierte Bewerbung-/Präsentationsproben verwenden denselben `/api/coach`-Pfad und zählen deshalb vollständig gegen dessen Kosten- und Missbrauchsgrenzen.
+
 Die exakten Werte nach Preview-Lasttest anpassen.
 
 ## 2. Budget-Fail-Safe
@@ -28,6 +30,7 @@ Wenn ein Kostenlimit oder externer Anbieter ausfällt:
 - keine Endlosschleifen
 - keine aggressiven automatischen Retries
 - kontrollierter lokaler Coach-Fallback
+- personalisierte Probe bleibt durch denselben lokalen Fallback nutzbar
 - Präzisionstranskription darf scheitern, lokale Audioanalyse bleibt nutzbar
 - Nutzer erhält verständlichen Fehler ohne Secret/Stacktrace
 
@@ -52,6 +55,7 @@ Nicht in Logs/Event-Properties:
 - CV
 - Stellenanzeige
 - Präsentationsnotizen
+- erzeugte personalisierte Fragen
 - Passwörter/Tokens/Secrets
 
 ## 4. Health
@@ -92,6 +96,9 @@ Nicht in Logs/Event-Properties:
 - Startseite
 - Training Lab öffnen/schließen
 - Baseline starten oder kontrollierten Unsupported-State sehen
+- Inhaltsanalyse öffnen
+- personalisierte Bewerbung vorbereiten und Probe starten
+- personalisierte Präsentations-Q&A vorbereiten und Probe starten
 - Solo-Training
 - Fortschritt
 - 4-Wochen-Plan
@@ -103,6 +110,7 @@ Auf Browsern mit Web Speech Recognition zusätzlich:
 - Solo Live-Transkript
 - Baseline
 - Coach Spracheingabe
+- Spracheingabe der personalisierten Probe
 
 Auf Browsern mit MediaRecorder zusätzlich:
 
@@ -120,9 +128,22 @@ Auf Browsern mit MediaRecorder zusätzlich:
 - vorzeitig stoppen
 - automatische 60 Sekunden
 - Startprofil gespeichert
+- gespeichertes Profil enthält kein Rohtranskript
+- gespeichertes Profil enthält keine detaillierte Inhaltsanalyse
 - Fortschritt nutzt Baseline, solange echte Skillwerte fehlen
 - echte Trainingswerte ersetzen Baseline-Fallbacks
 - erneute Baseline überschreibt nur das Baseline-Profil
+- Baseline exportieren
+- Baseline löschen
+
+### Baseline-Kontotrennung
+
+- Gast-Baseline erstellen
+- erstes Konto übernimmt Gast-Baseline kontrolliert
+- zweites Konto sieht diese Baseline nicht
+- zweites Konto besitzt eigene Baseline
+- Wechsel zurück zu Konto 1 stellt dessen Baseline wieder her
+- lokales Löschen eines Kontos entfernt nur dessen aktive Baseline
 
 ### Inhaltsanalyse 2.0
 
@@ -130,22 +151,44 @@ Auf Browsern mit MediaRecorder zusätzlich:
 - Solo-Session auswählen
 - Präzision/Struktur/Kürze/Belege erscheinen
 - Hedging-Tags erscheinen bei passenden Texten
+- Wiederholungen bleiben Hinweise
 - keine falsche Behauptung von Faktenprüfung
+- keine Persönlichkeits-/Emotionserkennung
 
 ### Bewerbung
 
 - CV und Stellenanzeige einfügen
 - Textdatei laden
 - >300 KB Datei wird nicht automatisch verarbeitet
-- Fragen werden erzeugt
-- Texte werden nicht automatisch in Cloud-Historie geschrieben
+- sechs Fragen werden lokal erzeugt
+- Roh-CV/Stellenanzeige werden nicht in Dialoghistory geschrieben
+- Roh-CV/Stellenanzeige werden nicht automatisch in Supabase geschrieben
+- personalisierte Probe starten
+- bis zu fünf erzeugte Fragen werden nacheinander gestellt
+- Textantwort funktioniert
+- Spracheingabe funktioniert oder degradiert kontrolliert
+- TTS funktioniert
+- Coach-Feedback erscheint pro Antwort
+- Klarheit/Struktur/Wirkung werden bewertet
+- echter AI-Modus funktioniert
+- lokaler Fallback funktioniert
+- Ergebnis wird als Dialogtraining gespeichert
+- an `/api/coach` werden nur erzeugte Frage/Gesprächskontext und Nutzerantwort übertragen, nicht das Rohdokument
+- keine Eignungsprozentzahl oder Bewerberranking
 
 ### Präsentation
 
 - Notizen einfügen
 - Checkliste erscheint
 - fünf kritische Fragen erscheinen
-- Wechsel zum Live-Coach funktioniert
+- vollständige Notizen bleiben lokal
+- personalisierte Q&A-Probe startet
+- fünf Fragen werden nacheinander trainiert
+- Text/Sprache/TTS funktionieren
+- Coach-Feedback/Scores funktionieren
+- AI-Modus und lokaler Fallback funktionieren
+- Ergebnis wird als Dialogtraining gespeichert
+- an `/api/coach` gehen nur erzeugte Fragen und Nutzerantworten, nicht vollständige Notizen
 
 ### Mini-Drills
 
@@ -163,6 +206,8 @@ Mindestens:
 - sichtbarer Fokus
 - Screenreader-Ankündigung des Overlays
 - Labels für Inputs
+- personalisierte Probe per Tastatur bedienbar
+- personalisierte Probe auf 360 px nutzbar
 - Reduced Motion
 - 44px Touch-Ziele
 
@@ -177,9 +222,10 @@ Preview:
 5. Browser-Matrix
 6. Auth
 7. Coach/Team
-8. Transcribe
-9. Training Lab
-10. Löschung
+8. personalisierte Bewerbung-/Präsentationsprobe
+9. Transcribe
+10. Training Lab
+11. Löschung
 
 Production:
 
@@ -188,7 +234,8 @@ Production:
 3. Health prüfen
 4. echte Domain/Auth-Redirects prüfen
 5. WAF-Limit kontrolliert testen
-6. Wegwerf-Testkonto komplett durchlaufen
+6. personalisierte Probe mit echtem AI-Endpunkt testen
+7. Wegwerf-Testkonto komplett durchlaufen
 
 ## 10. CSP/Supply Chain
 
@@ -206,7 +253,7 @@ Production:
 
 Zusätzlich sind `Cross-Origin-Opener-Policy: same-origin` und `X-Permitted-Cross-Domain-Policies: none` aktiv.
 
-Der Remote-Deployment-Smoke prüft die wichtigsten CSP-Direktiven. Diese Policy muss auf einem echten Preview gegen Auth, Training Lab, Audio und Coach getestet werden, bevor Production freigegeben wird.
+Der Remote-Deployment-Smoke prüft die wichtigsten CSP-Direktiven. Diese Policy muss auf einem echten Preview gegen Auth, Training Lab, personalisierte Proben, Audio und Coach getestet werden, bevor Production freigegeben wird.
 
 ### Noch offen: Runtime-CDN entfernen
 
@@ -229,6 +276,8 @@ Nicht veröffentlichen, wenn:
 - Preview fehlt
 - CSP nicht im echten Preview getestet ist
 - Browser-E2E offen ist
+- personalisierte Probe nicht mit AI und Fallback real getestet ist
+- Baseline-Kontotrennung ungeprüft ist
 - Rate-Limits fehlen
 - Löschflow ungeprüft ist
 - Kosten-/Monitoring-Grenzen nicht festgelegt sind
