@@ -2,7 +2,7 @@
 
 Stand: August 2026.
 
-Dieses Dokument ist die verbindliche Gesamtanleitung für SpeechCoach. Es verbindet Produktumfang, technische Architektur, Qualitätsanforderungen, Datenschutz, Betrieb und Veröffentlichung. Einzelne Detaildokumente ergänzen diese Datei; widerspricht ein Detaildokument diesem Master-Roadmap, muss die Abweichung vor Release geklärt werden.
+Dieses Dokument ist die verbindliche Gesamtanleitung für SpeechCoach. Es verbindet Produktumfang, technische Architektur, Qualitätsanforderungen, Datenschutz, Betrieb und Veröffentlichung. Einzelne Detaildokumente ergänzen diese Datei; widerspricht ein Detaildokument dieser Master-Roadmap, muss die Abweichung vor Release geklärt werden.
 
 ## 1. Produktziel
 
@@ -29,6 +29,7 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 - kurze Einstiegshürden, aber tiefe Trainingsmöglichkeiten
 - echte Simulationen statt nur statischer Tipps
 - mobile Nutzung muss gleichwertig möglich sein
+- persönliche Rohdokumente nur übertragen, wenn eine Funktion das ausdrücklich benötigt und der Nutzer den Vorgang bewusst startet
 
 ## 3. Aktueller Kernumfang
 
@@ -41,7 +42,7 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 - schwierige Gespräche
 - Präsentieren/Pitchen
 - 48 kuratierte Aufgaben
-- eigenes/zuvor vorgeschlagenes/zufälliges Thema
+- eigenes/vorgeschlagenes/zufälliges Thema
 - 30/60/120 Sekunden
 - Live-Transkript
 - Tempo, Füllwörter, Wortanzahl, Wortvielfalt
@@ -83,6 +84,8 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 ### Training Lab
 
 - 60-Sekunden-Baseline
+- account-getrennte Baseline-Speicherung
+- kein dauerhaft gespeichertes Baseline-Rohtranskript
 - Baseline als Fallback für frühe Fortschritts- und Planwerte
 - Inhaltsanalyse 2.0
 - Präzision
@@ -93,6 +96,10 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 - klare nächste Schritte
 - Lebenslauf + Stellenanzeige → personalisierte Fragen
 - Präsentationsnotizen → kritisches Q&A
+- personalisierte Bewerbungssimulation mit Sprache/Text/TTS und Coach-Scoring
+- personalisierte Präsentations-Q&A-Probe mit Sprache/Text/TTS und Coach-Scoring
+- nur erzeugte Trainingsfrage + Nutzerantwort werden bei bewusster Probe an die Coach-Auswertung gesendet
+- Roh-CV, vollständige Stellenanzeige und Präsentationsnotizen bleiben lokal
 - 5-Minuten-Warm-ups
 
 ### Fortschritt
@@ -104,6 +111,7 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 - schwächster Bereich
 - Empfehlungen
 - adaptiver Vier-Wochen-Plan
+- personalisierte Bewerbung-/Präsentationsproben fließen als Dialogtraining ein
 
 ### Konto/Cloud
 
@@ -123,16 +131,19 @@ Der Kern ist nicht „möglichst viele KI-Funktionen“, sondern ein nachvollzie
 
 1. Training Lab vollständig browsertesten.
 2. Baseline im Fortschritt und im Vier-Wochen-Plan verifizieren.
-3. Inhaltsanalyse 2.0 gegen echte deutschsprachige Beispielantworten evaluieren.
-4. Bewerbungs-Personalisierung mit realistischen Stellenanzeigen testen.
-5. Präsentations-Q&A mit kurzen und langen Notizen testen.
-6. globale Rate-Limits aktivieren.
-7. echte Browser-E2E-Flows automatisieren oder verbindlich manuell dokumentieren.
-8. Legal-/Datenschutz-Release-Gate erfüllen.
-9. Kosten- und Missbrauchsgrenzen festlegen.
-10. Production-Monitoring aktivieren.
-11. CSP/Supply-Chain-Strategie abschließen.
-12. CI und Production-Build tatsächlich grün ausführen.
+3. account-getrennte Baseline mit Gast → Konto → Kontowechsel → Abmeldung testen.
+4. Inhaltsanalyse 2.0 gegen echte deutschsprachige Beispielantworten evaluieren.
+5. Bewerbungs-Personalisierung mit realistischen Stellenanzeigen testen.
+6. personalisierte Bewerbungssimulation mit echter Coach-API und Offline-Fallback testen.
+7. Präsentations-Q&A mit kurzen und langen Notizen testen.
+8. personalisierte Präsentationsprobe mit echter Coach-API und Offline-Fallback testen.
+9. globale Rate-Limits aktivieren.
+10. echte Browser-E2E-Flows automatisieren oder verbindlich manuell dokumentieren.
+11. Legal-/Datenschutz-Gate erfüllen.
+12. Kosten- und Missbrauchsgrenzen festlegen.
+13. Production-Monitoring aktivieren.
+14. CSP/Supply-Chain-Strategie final verifizieren.
+15. CI und Production-Build tatsächlich grün ausführen.
 
 ### P1 — direkt nach stabilem ersten Release
 
@@ -196,6 +207,7 @@ Prüfkategorien:
 - strukturierte Ausgabe valide
 - keine Prompt-Injection aus Browserdaten übernehmen
 - Fallback verhält sich kontrolliert
+- personalisierte Probe bewertet die Nutzerantwort zur gestellten Frage, nicht die vermeintliche Eignung für eine Stelle
 
 Details: `docs/AI_EVALUATION.md`.
 
@@ -217,11 +229,18 @@ Die App darf Bewerbungstraining personalisieren, aber keine Beschäftigungsentsc
 
 Zulässig im Produktkern:
 
-- Fragen aus CV/Stellenanzeige erzeugen
+- Fragen aus CV/Stellenanzeige lokal erzeugen
+- lokal erzeugte Fragen gezielt trainieren
 - STAR-Struktur trainieren
-- Konkretheit/Relevanz der Antwort bewerten
+- Konkretheit/Relevanz der Antwort kommunikativ bewerten
 - fehlende Beispiele markieren
 - Antwortvarianten trainieren
+
+Datenschutzregel:
+
+- CV/Stellenanzeige bleiben im Training Lab lokal.
+- Erst bei bewusster personalisierter Probe werden die erzeugte Frage und die Nutzerantwort an die Coach-Auswertung gesendet.
+- Roh-CV und vollständige Stellenanzeige werden nicht automatisch an OpenAI übertragen.
 
 Nicht in den Consumer-Kern:
 
@@ -241,18 +260,32 @@ P1-Zielbild:
 6. Q&A aus dem Material erzeugen.
 7. Abschluss/Call-to-Action prüfen.
 
-Für v1 reicht der sichere textbasierte Notiz-/Q&A-Modus im Training Lab.
+Für v1 reicht der sichere textbasierte Notiz-/Q&A-Modus mit personalisierter Frageprobe im Training Lab.
+
+Die vollständigen Präsentationsnotizen bleiben lokal; für die Probe werden nur erzeugte Fragen und Nutzerantworten verarbeitet.
 
 ## 10. Datenschutz und Datenhaltung
 
 Datenklassen:
 
-### Lokal standardmäßig
+### Nur temporär/lokal während der Nutzung
 
 - temporäres Audio
-- Baseline-Transkript
+- Baseline-Rohtranskript während der laufenden Auswertung
 - Training-Lab-CV-/Stellenanzeigentext
 - Präsentationsnotizen
+
+### Lokal persistiert
+
+- Baseline nur als abgeleitete Startwerte, account-getrennt
+- lokale Trainingshistorie
+- lokale Trainingspläne
+
+### Bei bewusster Coach-Nutzung serverseitig verarbeitet
+
+- aktuelle Coach-Frage
+- Nutzerantwort
+- bei personalisierter Probe die lokal erzeugte Frage, nicht das Rohdokument
 
 ### Optional synchronisierbar
 
@@ -260,11 +293,15 @@ Datenklassen:
 - ausgewählte Transkripte nur nach Opt-in
 - Fortschrittskennzahlen
 - Trainingsplan
+- Ergebnis einer personalisierten Probe als normale Dialog-Kennzahlen
 
 ### Niemals als normaler Verlauf speichern
 
 - Audio-Blobs
 - temporäre Wort-Zeitmarken
+- CV-/Stellenanzeigen-Rohtext aus dem Training Lab
+- Präsentationsnotizen aus dem Training Lab
+- Baseline-Rohtranskript
 - Service-Role-Secrets
 - OpenAI-Key im Browser
 
@@ -283,15 +320,28 @@ Vor Release verbindlich:
 - No-Store für API-Antworten
 - WAF/Distributed-Limiter
 - Security-Header
+- Content-Security-Policy
+- Cross-Origin-Opener-Policy
 - Abbruch laufender Requests
 - keine Gesprächsinhalte in Diagnose-Logs
 
+Aktueller CSP-Stand:
+
+- `default-src 'self'`
+- `object-src 'none'`
+- `frame-ancestors 'none'`
+- `base-uri 'self'`
+- OpenAI ist nicht als Browser-`connect-src` freigegeben
+- Supabase-Verbindungen sind erlaubt
+- der aktuell gepinnte Supabase-jsDelivr-ESM-Import ist noch als externer Script-Host erlaubt
+
 Supply-Chain-Ziel:
 
-- externe Runtime-Abhängigkeiten minimieren
-- Supabase-SDK mittelfristig über den normalen Build bundlen statt dynamischem CDN-Import
-- anschließend strengere Content-Security-Policy erzwingen
-- CSP zuerst auf Preview gegen alle Auth-, Audio- und Coach-Flows testen
+1. `@supabase/supabase-js` über den normalen Build bundlen.
+2. externen Runtime-CDN-Import entfernen.
+3. jsDelivr aus `script-src` entfernen.
+4. Preview gegen Auth-, Audio-, Coach- und Training-Lab-Flows testen.
+5. CSP danach erneut minimieren.
 
 ## 12. Kostenkontrolle
 
@@ -303,6 +353,7 @@ Vor öffentlichem Release festlegen:
 - tägliches/monatliches internes Kostenwarnlimit
 - Verhalten bei Budgetüberschreitung
 - kontrollierter Fallback statt unendlicher Wiederholungen
+- personalisierte Proben zählen wie normale Coach-Anfragen und müssen unter denselben Limits bleiben
 
 Details: `docs/OPERATIONS_RELEASE.md`.
 
@@ -358,6 +409,7 @@ Verbindlich:
 - Touch-Ziele
 - sinnvolle Labels
 - keine Information ausschließlich über Farbe
+- personalisierte Probe ist vollständig per Tastatur bedienbar
 
 Details: `docs/ACCESSIBILITY.md`.
 
@@ -377,6 +429,7 @@ Details: `docs/LEGAL_DATA_RELEASE.md`.
 - Pitch
 - Content-Analyse
 - Fragegeneratoren
+- Baseline-Store
 - Rate-Limiter
 - Request-Lifecycle
 
@@ -384,6 +437,7 @@ Details: `docs/LEGAL_DATA_RELEASE.md`.
 
 - kritische Dateien vorhanden
 - Privacy-/Security-Invarianten
+- personalisierte Probe verdrahtet
 - keine Secrets
 - Syntaxchecks
 
@@ -399,6 +453,7 @@ Details: `docs/LEGAL_DATA_RELEASE.md`.
 - Remote HTTP-Smoke
 - Auth E2E
 - Coach E2E
+- personalisierte Bewerbung-/Präsentationsprobe
 - Audio/Pitch
 - Training Lab
 - Accessibility
@@ -422,14 +477,15 @@ Details: `docs/LEGAL_DATA_RELEASE.md`.
 6. Remote-Smoke Preview.
 7. Browser-E2E.
 8. AI-Evaluation.
-9. Pitch-/Audio-Kalibrierung.
-10. Legal-/Datenschutz-Gate.
-11. Kosten-/Monitoring-Gate.
-12. WAF/Distributed-Rate-Limit.
-13. Production deployen.
-14. Remote-Smoke Production.
-15. Wegwerf-Testkonto komplett durchlaufen lassen.
-16. erst dann PR aus Draft nehmen und mergen.
+9. personalisierte Bewerbungs-/Präsentationsprobe mit echtem Coach-Endpunkt testen.
+10. Pitch-/Audio-Kalibrierung.
+11. Legal-/Datenschutz-Gate.
+12. Kosten-/Monitoring-Gate.
+13. WAF/Distributed-Rate-Limit.
+14. Production deployen.
+15. Remote-Smoke Production.
+16. Wegwerf-Testkonto komplett durchlaufen lassen.
+17. erst dann PR aus Draft nehmen und mergen.
 
 ## 19. Aktuelle Blocker
 
@@ -448,6 +504,7 @@ v1 ist bereit, wenn:
 - Kerntraining stabil ist
 - Training Lab stabil ist
 - Baseline den Plan sinnvoll initialisiert
+- personalisierte Bewerbungs- und Präsentationsproben stabil sind
 - KI- und Offline-Fallbacks kontrolliert funktionieren
 - Datenschutzflüsse real getestet sind
 - echte Browser-/Mobile-Tests bestanden sind
