@@ -165,7 +165,7 @@
 }
 
 @media (max-width: 480px) {
-  .feature-launchers { grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 5px; }
+  .feature-launchers { grid-template-columns: repeat(4, minmax(44px, 1fr)); gap: 5px; }
   .feature-launchers .coach-launcher,
   .feature-launchers .team-launcher,
   .feature-launchers .progress-launcher,
