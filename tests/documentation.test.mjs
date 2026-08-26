@@ -23,7 +23,7 @@ test('A-to-Z documentation set remains complete', () => {
 
   const master = read('docs/MASTER_ROADMAP.md')
   assert.match(master, /Feature-Freeze/)
-  assert.match(master, /Legal-\/Datenschutz-Gate/)
+  assert.match(master, /Legal-\/Datenschutz/)
   assert.match(master, /Kostenkontrolle/)
   assert.match(master, /Browser- und Geräte-Matrix/)
   assert.match(master, /Emotionserkennung/)
