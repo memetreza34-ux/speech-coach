@@ -65,7 +65,7 @@ function LabHeader({ onClose }) {
 }
 
 function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
-  const [status, setStatus] = useState('ready')
+  const [status, setStatus] = useState(baseline ? 'result' : 'ready')
   const [transcript, setTranscript] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState('')
