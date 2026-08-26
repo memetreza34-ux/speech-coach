@@ -7,6 +7,15 @@ const safeRead = (key) => {
   }
 }
 
+const readBaseline = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem('speech-coach-baseline') || 'null')
+    return value && typeof value === 'object' ? value : null
+  } catch {
+    return null
+  }
+}
+
 const readWeeklyGoal = () => {
   try {
     const profile = JSON.parse(localStorage.getItem('speech-coach-account-profile') || 'null')
@@ -157,6 +166,7 @@ const recommendationFor = (skills, hasDialog, hasAudio) => {
 }
 
 export const readProgressData = () => {
+  const baseline = readBaseline()
   const soloSessions = safeRead('speech-coach-history').map(normalizeSolo)
   const dialogSessions = safeRead('speech-coach-dialog-history').map(normalizeDialog)
   const audioSessions = safeRead('speech-coach-audio-history').map(normalizeAudio)
@@ -164,7 +174,7 @@ export const readProgressData = () => {
     .filter((session) => session.createdAt)
     .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
 
-  const skills = {
+  const measuredSkills = {
     pace: average(sessions.map((session) => session.details.pace)),
     fillerControl: average(sessions.map((session) => session.details.fillerControl)),
     clarity: average(sessions.map((session) => session.details.clarity)),
@@ -174,6 +184,16 @@ export const readProgressData = () => {
     pauseControl: average(sessions.map((session) => session.details.pauseControl)),
   }
 
+  const skills = {
+    pace: measuredSkills.pace ?? Number(baseline?.skills?.pace) || null,
+    fillerControl: measuredSkills.fillerControl ?? Number(baseline?.skills?.fillerControl) || null,
+    clarity: measuredSkills.clarity ?? Number(baseline?.skills?.clarity) || null,
+    structure: measuredSkills.structure ?? Number(baseline?.skills?.structure) || null,
+    impact: measuredSkills.impact ?? Number(baseline?.skills?.impact) || null,
+    voiceDynamics: measuredSkills.voiceDynamics,
+    pauseControl: measuredSkills.pauseControl,
+  }
+
   const categoryCounts = sessions.reduce((counts, session) => ({ ...counts, [session.category]: (counts[session.category] || 0) + 1 }), {})
   const favoriteCategory = Object.entries(categoryCounts).sort((left, right) => right[1] - left[1])[0]?.[0] || 'Noch offen'
   const week = buildWeek(sessions)
@@ -181,12 +201,13 @@ export const readProgressData = () => {
   const weeklyGoal = readWeeklyGoal()
 
   return {
+    baseline,
     sessions,
     soloSessions,
     dialogSessions,
     audioSessions,
     skills,
-    overall: average(sessions.map((session) => session.overall)) || 0,
+    overall: average(sessions.map((session) => session.overall)) || Number(baseline?.overall) || 0,
     streak: calculateStreak(sessions),
     totalMinutes: Math.round(sessions.reduce((sum, session) => sum + session.durationMs, 0) / 60000),
     favoriteCategory,
