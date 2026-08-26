@@ -74,6 +74,12 @@ check((root.headers.get('x-content-type-options') || '').toLowerCase() === 'nosn
 check((root.headers.get('x-frame-options') || '').toUpperCase() === 'DENY', 'Clickjacking-Schutz ist aktiv')
 check(Boolean(root.headers.get('referrer-policy')), 'Referrer-Policy ist gesetzt')
 check(Boolean(root.headers.get('permissions-policy')), 'Permissions-Policy ist gesetzt')
+check((root.headers.get('cross-origin-opener-policy') || '').toLowerCase() === 'same-origin', 'Cross-Origin-Opener-Policy ist same-origin')
+const csp = root.headers.get('content-security-policy') || ''
+check(csp.includes("default-src 'self'"), 'CSP beschränkt default-src auf self', csp || 'kein CSP-Header')
+check(csp.includes("object-src 'none'"), 'CSP blockiert Plugins/Objects', csp || 'kein CSP-Header')
+check(csp.includes("frame-ancestors 'none'"), 'CSP blockiert Framing', csp || 'kein CSP-Header')
+check(csp.includes('https://*.supabase.co'), 'CSP erlaubt nur den vorgesehenen Supabase-Netzwerkbereich', csp || 'kein CSP-Header')
 if (target.protocol === 'https:') check(Boolean(root.headers.get('strict-transport-security')), 'HSTS ist aktiv')
 
 const html = await root.text()
