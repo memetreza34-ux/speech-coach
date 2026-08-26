@@ -19,6 +19,9 @@ const requiredFiles = [
   'src/AudioStudioPro.jsx',
   'src/ConversationCoach.jsx',
   'src/TeamCoach.jsx',
+  'src/TrainingLab.jsx',
+  'src/training-lab.css',
+  'src/contentAnalysis.js',
   'src/TrainingPlanCenter.jsx',
   'src/ErrorBoundary.jsx',
   'api/_security.js',
@@ -26,6 +29,12 @@ const requiredFiles = [
   'api/coach.js',
   'api/team-coach.js',
   'api/transcribe.js',
+  'docs/INDEX.md',
+  'docs/MASTER_ROADMAP.md',
+  'docs/PRODUCT_SPEC.md',
+  'docs/AI_EVALUATION.md',
+  'docs/LEGAL_DATA_RELEASE.md',
+  'docs/OPERATIONS_RELEASE.md',
   'docs/ACCESSIBILITY.md',
   'docs/API_SECURITY.md',
   'docs/DEPLOYMENT.md',
@@ -55,8 +64,14 @@ expect(deploymentRunbook.includes('npm run test:deployment'), 'deployment runboo
 expect(deploymentRunbook.includes('npm run check:env'), 'deployment runbook must document production environment validation')
 expect(deploymentRunbook.includes('Supabase Auth URL Configuration'), 'deployment runbook must document Supabase redirect configuration')
 
+const masterRoadmap = read('docs/MASTER_ROADMAP.md')
+expect(masterRoadmap.includes('Training Lab'), 'master roadmap must include the personalized Training Lab')
+expect(masterRoadmap.includes('Definition „SpeechCoach v1 bereit“'), 'master roadmap must define the v1 release condition')
+expect(masterRoadmap.includes('Emotionserkennung'), 'master roadmap must retain prohibited inference boundaries')
+
 const accessibilityDocs = read('docs/ACCESSIBILITY.md')
 expect(accessibilityDocs.includes('Nur Tastatur'), 'accessibility documentation must retain the keyboard release checklist')
+expect(accessibilityDocs.includes('alle sieben Launcher'), 'accessibility documentation must cover all seven launchers')
 expect(accessibilityDocs.includes('Screenreader'), 'accessibility documentation must retain real screenreader testing')
 expect(accessibilityDocs.includes('Nicht behaupten ohne echten Test'), 'accessibility documentation must not overstate compliance')
 
@@ -68,6 +83,9 @@ expect(pitchDocs.includes('Manuelle Kalibrierung vor Release'), 'pitch documenta
 const rootApp = read('src/RootApp.jsx')
 expect(rootApp.includes("import AudioStudio from './AudioStudioPro.jsx'"), 'AudioStudioPro is not the active audio studio')
 expect(rootApp.includes("import TeamCoach from './TeamCoach.jsx'"), 'TeamCoach is not wired into RootApp')
+expect(rootApp.includes("import TrainingLab from './TrainingLab.jsx'"), 'Training Lab is not wired into RootApp')
+expect(rootApp.includes('data-focus-key="lab"'), 'Training Lab launcher focus key is missing')
+expect(rootApp.includes("activeView === 'lab'"), 'Training Lab overlay route is missing')
 expect(rootApp.includes('MotionConfig reducedMotion="user"'), 'Framer Motion must respect the user reduced-motion preference')
 expect(rootApp.includes("event.key !== 'Escape'"), 'full-screen training views must support Escape to close')
 expect(rootApp.includes('data-focus-key="coach"'), 'launcher focus restoration keys are missing')
@@ -77,6 +95,25 @@ expect(rootApp.includes('abortActiveRequests()'), 'RootApp must abort active req
 expect(rootApp.includes("window.addEventListener('pagehide'"), 'active requests must be cancelled when the page is hidden')
 expect(rootApp.includes('button[aria-label="Zurück"]'), 'internal back navigation must cancel tracked requests')
 expect(rootApp.includes("window.addEventListener('unhandledrejection'"), 'expected AbortError navigation cancellations must be handled centrally')
+
+const trainingLab = read('src/TrainingLab.jsx')
+expect(trainingLab.includes('60-Sekunden-Baseline'), 'Training Lab must retain the baseline assessment')
+expect(trainingLab.includes('Lebenslauf + Stellenanzeige'), 'Training Lab must retain personalized interview preparation')
+expect(trainingLab.includes('Notizen → Publikums-Q&A'), 'Training Lab must retain presentation Q&A')
+expect(trainingLab.includes('5-Minuten-Drills'), 'Training Lab must retain quick drills')
+expect(trainingLab.includes("localStorage.setItem('speech-coach-baseline'"), 'baseline must remain locally persisted')
+
+const contentAnalysis = read('src/contentAnalysis.js')
+expect(contentAnalysis.includes('analyseContentQuality'), 'content quality analysis is missing')
+expect(contentAnalysis.includes('buildInterviewQuestions'), 'interview question generator is missing')
+expect(contentAnalysis.includes('buildPresentationQuestions'), 'presentation question generator is missing')
+expect(contentAnalysis.includes('HEDGES'), 'content analysis must retain hedging indicators')
+expect(contentAnalysis.includes('repeatedPhrases'), 'content analysis must retain repetition indicators')
+
+const progressUtils = read('src/progressUtils.js')
+expect(progressUtils.includes('speech-coach-baseline'), 'progress must read the local baseline')
+expect(progressUtils.includes('measuredSkills.pace ??'), 'real measured progress must override baseline fallback')
+expect(progressUtils.includes('baseline,'), 'progress output must expose baseline context')
 
 const requestLifecycle = read('src/requestLifecycle.js')
 expect(requestLifecycle.includes('new AbortController()'), 'request lifecycle must use AbortController')
@@ -163,6 +200,8 @@ expect(apiSecurityDocs.includes('keine globale Rate-Limit-Garantie'), 'API secur
 const productionChecklist = read('docs/PRODUCTION_CHECKLIST.md')
 expect(productionChecklist.includes('docs/PITCH_CALIBRATION.md'), 'production checklist must require real pitch calibration')
 expect(productionChecklist.includes('analysisConfidence'), 'production checklist must verify confidence-weighted pitch behavior')
+expect(productionChecklist.includes('## 8. Training Lab'), 'production checklist must include Training Lab release checks')
+expect(productionChecklist.includes('alle sieben Launcher'), 'production checklist must cover all seven top-level launchers')
 
 const health = read('api/health.js')
 expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
@@ -177,6 +216,9 @@ for (const requiredHeader of ['X-Content-Type-Options', 'X-Frame-Options', 'Refe
 
 const sourceFiles = [
   'src/RootApp.jsx',
+  'src/TrainingLab.jsx',
+  'src/contentAnalysis.js',
+  'src/progressUtils.js',
   'src/AudioStudioPro.jsx',
   'src/pitchAnalysis.js',
   'src/requestLifecycle.js',
@@ -205,7 +247,9 @@ const syntaxFiles = [
   'scripts/deployment-smoke.mjs',
   'scripts/validate-production-env.mjs',
   'src/audioAnalysis.js',
+  'src/contentAnalysis.js',
   'src/pitchAnalysis.js',
+  'src/progressUtils.js',
   'src/requestLifecycle.js',
   'src/serverTranscription.js',
   'src/coachService.js',
