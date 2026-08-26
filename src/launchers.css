@@ -2,7 +2,8 @@
 .feature-launchers .team-launcher,
 .feature-launchers .audio-launcher,
 .feature-launchers .account-launcher,
-.feature-launchers .plan-launcher {
+.feature-launchers .plan-launcher,
+.feature-launchers .lab-launcher {
   position: static;
   right: auto;
   bottom: auto;
@@ -11,7 +12,8 @@
 
 .account-launcher,
 .plan-launcher,
-.team-launcher {
+.team-launcher,
+.lab-launcher {
   min-width: 220px;
   min-height: 58px;
   display: grid;
@@ -30,10 +32,12 @@
 .account-launcher { border: 1px solid rgba(56, 189, 248, 0.22); }
 .plan-launcher { border: 1px solid rgba(167, 139, 250, 0.23); }
 .team-launcher { border: 1px solid rgba(45, 212, 191, 0.24); }
+.lab-launcher { border: 1px solid rgba(96, 165, 250, 0.26); }
 
 .account-launcher-icon,
 .plan-launcher-icon,
-.team-launcher-icon {
+.team-launcher-icon,
+.lab-launcher-icon {
   width: 42px;
   height: 42px;
   display: grid;
@@ -56,10 +60,16 @@
   background: linear-gradient(135deg, #0891b2, #059669);
   box-shadow: 0 10px 25px rgba(13, 148, 136, 0.22);
 }
+.lab-launcher-icon {
+  color: #eff6ff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.24);
+}
 
 .account-launcher-copy,
 .plan-launcher-copy,
-.team-launcher-copy { min-width: 0; text-align: left; }
+.team-launcher-copy,
+.lab-launcher-copy { min-width: 0; text-align: left; }
 
 .account-launcher-copy strong,
 .account-launcher-copy small,
@@ -67,7 +77,9 @@
 .plan-launcher-copy small,
 .team-launcher-copy strong,
 .team-launcher-copy small,
-.team-launcher-copy em {
+.team-launcher-copy em,
+.lab-launcher-copy strong,
+.lab-launcher-copy small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -76,13 +88,15 @@
 
 .account-launcher-copy strong,
 .plan-launcher-copy strong,
-.team-launcher-copy strong {
+.team-launcher-copy strong,
+.lab-launcher-copy strong {
   font-family: 'Outfit', sans-serif;
   font-size: 0.9rem;
 }
 .account-launcher-copy small,
 .plan-launcher-copy small,
-.team-launcher-copy small {
+.team-launcher-copy small,
+.lab-launcher-copy small {
   margin-top: 2px;
   color: #94a3b8;
   font-size: 0.63rem;
@@ -93,6 +107,7 @@
 .account-launcher > svg { color: #7dd3fc; }
 .plan-launcher > svg { color: #c4b5fd; }
 .team-launcher > svg { color: #5eead4; }
+.lab-launcher > svg { color: #93c5fd; }
 
 .launcher-spin { animation: launcher-spin 0.9s linear infinite; }
 @keyframes launcher-spin { to { transform: rotate(360deg); } }
@@ -115,7 +130,8 @@
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
-  .feature-launchers .plan-launcher {
+  .feature-launchers .plan-launcher,
+  .feature-launchers .lab-launcher {
     min-width: 0;
     min-height: 58px;
     width: 100%;
@@ -129,7 +145,8 @@
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
-  .feature-launchers .plan-launcher {
+  .feature-launchers .plan-launcher,
+  .feature-launchers .lab-launcher {
     padding: 8px;
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -138,32 +155,38 @@
   .feature-launchers .plan-launcher-copy small,
   .feature-launchers .team-launcher-copy small,
   .feature-launchers .team-launcher-copy em,
+  .feature-launchers .lab-launcher-copy small,
   .feature-launchers .audio-launcher > svg:last-child,
   .feature-launchers .account-launcher > svg:last-child,
   .feature-launchers .plan-launcher > svg:last-child,
-  .feature-launchers .team-launcher > svg:last-child { display: none; }
+  .feature-launchers .team-launcher > svg:last-child,
+  .feature-launchers .lab-launcher > svg:last-child { display: none; }
   .progress-filter-tabs button { min-width: 68px; }
 }
 
 @media (max-width: 480px) {
-  .feature-launchers { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .feature-launchers { grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 5px; }
   .feature-launchers .coach-launcher,
   .feature-launchers .team-launcher,
   .feature-launchers .progress-launcher,
   .feature-launchers .audio-launcher,
   .feature-launchers .account-launcher,
-  .feature-launchers .plan-launcher {
+  .feature-launchers .plan-launcher,
+  .feature-launchers .lab-launcher {
     display: flex;
     justify-content: center;
     min-height: 52px;
+    min-width: 44px;
     border-radius: 14px;
+    padding: 5px;
   }
   .feature-launchers .coach-launcher-copy,
   .feature-launchers .team-launcher-copy,
   .feature-launchers .progress-launcher-copy,
   .feature-launchers .audio-launcher-copy,
   .feature-launchers .account-launcher-copy,
-  .feature-launchers .plan-launcher-copy { display: none; }
+  .feature-launchers .plan-launcher-copy,
+  .feature-launchers .lab-launcher-copy { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
