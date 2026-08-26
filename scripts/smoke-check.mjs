@@ -21,6 +21,8 @@ const requiredFiles = [
   'src/TeamCoach.jsx',
   'src/TrainingLab.jsx',
   'src/training-lab.css',
+  'src/PersonalizedPractice.jsx',
+  'src/personalized-practice.css',
   'src/contentAnalysis.js',
   'src/baselineStore.js',
   'src/TrainingPlanCenter.jsx',
@@ -69,6 +71,8 @@ const masterRoadmap = read('docs/MASTER_ROADMAP.md')
 expect(masterRoadmap.includes('Training Lab'), 'master roadmap must include the personalized Training Lab')
 expect(masterRoadmap.includes('Definition „SpeechCoach v1 bereit“'), 'master roadmap must define the v1 release condition')
 expect(masterRoadmap.includes('Emotionserkennung'), 'master roadmap must retain prohibited inference boundaries')
+expect(masterRoadmap.includes('personalisierte Bewerbungssimulation'), 'master roadmap must include personalized interview practice')
+expect(masterRoadmap.includes('Roh-CV'), 'master roadmap must document raw-document privacy')
 
 const accessibilityDocs = read('docs/ACCESSIBILITY.md')
 expect(accessibilityDocs.includes('Nur Tastatur'), 'accessibility documentation must retain the keyboard release checklist')
@@ -105,6 +109,20 @@ expect(trainingLab.includes('5-Minuten-Drills'), 'Training Lab must retain quick
 expect(trainingLab.includes("from './baselineStore.js'"), 'Training Lab must use the privacy-safe baseline store')
 expect(trainingLab.includes('saveBaselineProfile(profile)'), 'Training Lab must persist baseline through the safe store')
 expect(trainingLab.includes('clearBaselineProfile()'), 'Training Lab must allow the active baseline to be deleted')
+expect(trainingLab.includes("import PersonalizedPractice from './PersonalizedPractice.jsx'"), 'Training Lab must wire personalized practice')
+expect(trainingLab.includes("modeId: 'interview'"), 'Training Lab must create personalized interview presets')
+expect(trainingLab.includes("modeId: 'presentation'"), 'Training Lab must create personalized presentation presets')
+expect(trainingLab.includes('Personalisierte Probe starten'), 'Training Lab must expose personalized interview practice')
+
+const personalizedPractice = read('src/PersonalizedPractice.jsx')
+expect(personalizedPractice.includes("from './coachService.js'"), 'personalized practice must reuse the guarded coach service')
+expect(personalizedPractice.includes('requestCoachTurn({'), 'personalized practice must request coach scoring')
+expect(personalizedPractice.includes('preset.questions'), 'personalized practice must consume only generated question presets')
+expect(personalizedPractice.includes("localStorage.getItem('speech-coach-dialog-history')"), 'personalized practice must persist only normal dialog results')
+expect(personalizedPractice.includes("source: 'personalized-practice'"), 'personalized practice must announce progress changes')
+expect(personalizedPractice.includes('abortActiveRequests()'), 'personalized practice must cancel active requests on navigation/unmount')
+expect(personalizedPractice.includes('mountedRef.current'), 'personalized practice must guard late async completion')
+expect(!/preset\.(?:cv|job|notes|documents)/i.test(personalizedPractice), 'personalized practice must not receive raw document fields')
 
 const baselineStore = read('src/baselineStore.js')
 expect(baselineStore.includes("const GUEST_BASELINE_KEY = 'speech-coach-baseline'"), 'baseline store must retain guest baseline support')
@@ -213,6 +231,8 @@ expect(productionChecklist.includes('docs/PITCH_CALIBRATION.md'), 'production ch
 expect(productionChecklist.includes('analysisConfidence'), 'production checklist must verify confidence-weighted pitch behavior')
 expect(productionChecklist.includes('## 8. Training Lab'), 'production checklist must include Training Lab release checks')
 expect(productionChecklist.includes('alle sieben Launcher'), 'production checklist must cover all seven top-level launchers')
+expect(productionChecklist.includes('Personalisierte Probe starten'), 'production checklist must require personalized interview testing')
+expect(productionChecklist.includes('an Coach-API gehen nur lokal erzeugte Fragen'), 'production checklist must protect personalized document privacy')
 
 const health = read('api/health.js')
 expect(health.includes("status: 'ok'"), 'health endpoint does not expose a stable ok status')
@@ -236,6 +256,7 @@ for (const requiredHeader of [
 const sourceFiles = [
   'src/RootApp.jsx',
   'src/TrainingLab.jsx',
+  'src/PersonalizedPractice.jsx',
   'src/contentAnalysis.js',
   'src/baselineStore.js',
   'src/progressUtils.js',
