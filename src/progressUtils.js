@@ -1,18 +1,11 @@
+import { readBaselineProfile } from './baselineStore.js'
+
 const safeRead = (key) => {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]')
     return Array.isArray(value) ? value : []
   } catch {
     return []
-  }
-}
-
-const readBaseline = () => {
-  try {
-    const value = JSON.parse(localStorage.getItem('speech-coach-baseline') || 'null')
-    return value && typeof value === 'object' ? value : null
-  } catch {
-    return null
   }
 }
 
@@ -166,7 +159,7 @@ const recommendationFor = (skills, hasDialog, hasAudio) => {
 }
 
 export const readProgressData = () => {
-  const baseline = readBaseline()
+  const baseline = readBaselineProfile()
   const soloSessions = safeRead('speech-coach-history').map(normalizeSolo)
   const dialogSessions = safeRead('speech-coach-dialog-history').map(normalizeDialog)
   const audioSessions = safeRead('speech-coach-audio-history').map(normalizeAudio)
