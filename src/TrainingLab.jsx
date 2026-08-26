@@ -7,6 +7,7 @@ import {
   Briefcase,
   CheckCircle,
   Clipboard,
+  Download,
   FileText,
   Gauge,
   Lightbulb,
@@ -18,6 +19,7 @@ import {
   Square,
   Target,
   TimerReset,
+  Trash2,
   X,
   Zap,
 } from 'lucide-react'
@@ -28,6 +30,7 @@ import {
   createBaselineProfile,
   QUICK_DRILLS,
 } from './contentAnalysis.js'
+import { clearBaselineProfile, readBaselineProfile, saveBaselineProfile } from './baselineStore.js'
 
 const BASELINE_DURATION = 60
 
@@ -36,14 +39,6 @@ const readHistory = () => {
     return JSON.parse(localStorage.getItem('speech-coach-history') || '[]')
   } catch {
     return []
-  }
-}
-
-const readBaseline = () => {
-  try {
-    return JSON.parse(localStorage.getItem('speech-coach-baseline') || 'null')
-  } catch {
-    return null
   }
 }
 
@@ -82,6 +77,12 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
     try { recognitionRef.current?.abort() } catch { /* already inactive */ }
   }, [])
 
+  useEffect(() => {
+    if (!baseline || activeRef.current) return
+    setResult(baseline)
+    setStatus('result')
+  }, [baseline])
+
   const finish = () => {
     if (!activeRef.current) return
     activeRef.current = false
@@ -90,15 +91,12 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
     try { recognitionRef.current?.stop() } catch { /* browser already stopped */ }
     const durationMs = Math.max(1000, Math.min(BASELINE_DURATION * 1000, Date.now() - startedRef.current))
     const profile = createBaselineProfile(transcriptRef.current, durationMs)
-    setResult(profile)
+    const stored = saveBaselineProfile(profile)
+    setResult(stored || profile)
     setStatus('result')
     setElapsed(durationMs)
-    try {
-      localStorage.setItem('speech-coach-baseline', JSON.stringify(profile))
-      window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'baseline' } }))
-    } catch {
-      // Baseline can still be shown even when storage is unavailable.
-    }
+    transcriptRef.current = ''
+    setTranscript('')
   }
 
   const start = () => {
@@ -130,7 +128,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
       if (!activeRef.current || event.error === 'aborted') return
       setError(event.error === 'not-allowed' ? 'Der Mikrofonzugriff wurde abgelehnt.' : 'Die Spracherkennung wurde unterbrochen.')
       activeRef.current = false
-      setStatus('ready')
+      setStatus(result ? 'result' : 'ready')
       if (timerRef.current) window.clearInterval(timerRef.current)
     }
     recognition.onend = () => {
@@ -151,12 +149,32 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
       }, 200)
     } catch {
       activeRef.current = false
-      setStatus('ready')
+      setStatus(result ? 'result' : 'ready')
       setError('Die Baseline konnte nicht gestartet werden. Prüfe den Mikrofonzugriff.')
     }
   }
 
   const stop = () => finish()
+  const removeBaseline = () => {
+    clearBaselineProfile()
+    setResult(null)
+    setTranscript('')
+    transcriptRef.current = ''
+    setElapsed(0)
+    setStatus('ready')
+  }
+  const exportBaseline = () => {
+    if (!result) return
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `speechcoach-baseline-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
   const remaining = Math.max(0, BASELINE_DURATION - Math.floor(elapsed / 1000))
 
   return (
@@ -169,7 +187,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
           <div className="baseline-recorder">
             <div className={status === 'recording' ? 'baseline-orb active' : 'baseline-orb'}><Mic size={30} /></div>
             <strong>{status === 'recording' ? `${remaining}s` : '01:00'}</strong>
-            <span>{status === 'recording' ? 'Sprich frei. Eine kurze Denkpause ist besser als ein Füllwort.' : 'Dein Ergebnis wird nur lokal als Startprofil gespeichert.'}</span>
+            <span>{status === 'recording' ? 'Sprich frei. Eine kurze Denkpause ist besser als ein Füllwort.' : 'Gespeichert werden nur die abgeleiteten Startwerte – nicht dein Baseline-Rohtranskript.'}</span>
           </div>
           {transcript && <div className="lab-transcript" aria-live="polite">{transcript}</div>}
           {error && <div className="lab-warning">{error}</div>}
@@ -182,7 +200,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
           <div className="baseline-score"><strong>{result.overall}</strong><span>Startniveau</span></div>
           <div className="baseline-skills">{Object.entries(result.skills).map(([key, value]) => <div key={key}><span>{skillLabels[key]}</span><strong>{value}</strong><i><b style={{ width: `${value}%` }} /></i></div>)}</div>
           <div className="baseline-focus"><Sparkles size={18} /><span>Erster Fokus: <strong>{result.weakest.map((item) => skillLabels[item.key]).join(' + ')}</strong></span></div>
-          <div className="lab-actions"><button onClick={onOpenSolo}><Zap size={17} /> Solo trainieren</button><button onClick={onOpenAudio}><Activity size={17} /> Stimme messen</button><button onClick={start}><Play size={17} /> Neu messen</button></div>
+          <div className="lab-actions"><button onClick={onOpenSolo}><Zap size={17} /> Solo trainieren</button><button onClick={onOpenAudio}><Activity size={17} /> Stimme messen</button><button onClick={start}><Play size={17} /> Neu messen</button><button onClick={exportBaseline}><Download size={17} /> Baseline exportieren</button><button onClick={removeBaseline}><Trash2 size={17} /> Baseline löschen</button></div>
         </div>
       )}
     </section>
@@ -265,10 +283,10 @@ function QuickDrills({ onOpenSolo, onOpenCoach, onOpenAudio }) {
 }
 
 export default function TrainingLab({ onClose, onOpenSolo, onOpenCoach, onOpenAudio }) {
-  const [baseline, setBaseline] = useState(readBaseline)
+  const [baseline, setBaseline] = useState(readBaselineProfile)
 
   useEffect(() => {
-    const refresh = () => setBaseline(readBaseline())
+    const refresh = () => setBaseline(readBaselineProfile())
     window.addEventListener('speechcoach:data-changed', refresh)
     return () => window.removeEventListener('speechcoach:data-changed', refresh)
   }, [])
@@ -283,7 +301,7 @@ export default function TrainingLab({ onClose, onOpenSolo, onOpenCoach, onOpenAu
         <InterviewBuilder onOpenCoach={onOpenCoach} />
         <PresentationBuilder onOpenCoach={onOpenCoach} />
         <QuickDrills onOpenSolo={onOpenSolo} onOpenCoach={onOpenCoach} onOpenAudio={onOpenAudio} />
-        <p className="training-lab-note">Die Inhaltsanalyse nutzt transparente sprachliche Heuristiken. Sie bewertet keine Persönlichkeit, Emotionen, Eignung oder psychischen Zustände. Bewerbungstexte und Präsentationsnotizen werden in diesem Bereich nicht automatisch in die Cloud geschrieben.</p>
+        <p className="training-lab-note">Die Inhaltsanalyse nutzt transparente sprachliche Heuristiken. Sie bewertet keine Persönlichkeit, Emotionen, Eignung oder psychischen Zustände. Das Baseline-Rohtranskript wird nach der Auswertung nicht dauerhaft gespeichert. Bewerbungstexte und Präsentationsnotizen werden in diesem Bereich nicht automatisch in die Cloud geschrieben.</p>
       </main>
     </motion.div>
   )
