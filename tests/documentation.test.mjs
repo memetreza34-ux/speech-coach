@@ -27,6 +27,8 @@ test('A-to-Z documentation set remains complete', () => {
   assert.match(master, /Kostenkontrolle/)
   assert.match(master, /Browser- und Geräte-Matrix/)
   assert.match(master, /Emotionserkennung/)
+  assert.match(master, /personalisierte Bewerbungssimulation/)
+  assert.match(master, /Roh-CV/)
 
   const legal = read('docs/LEGAL_DATA_RELEASE.md')
   assert.match(legal, /CV-\/Stellenanzeigentexte/)
@@ -54,4 +56,24 @@ test('Training Lab remains wired into RootApp and progress fallback', () => {
   assert.match(lab, /Lebenslauf \+ Stellenanzeige/)
   assert.match(lab, /Präsentationsnotizen/)
   assert.match(lab, /60-Sekunden-Baseline/)
+})
+
+test('personalized practice uses generated questions without forwarding raw documents', () => {
+  assert.equal(fs.existsSync('src/PersonalizedPractice.jsx'), true)
+  assert.equal(fs.existsSync('src/personalized-practice.css'), true)
+
+  const lab = read('src/TrainingLab.jsx')
+  const practice = read('src/PersonalizedPractice.jsx')
+
+  assert.match(lab, /import PersonalizedPractice from '\.\/PersonalizedPractice\.jsx'/)
+  assert.match(lab, /modeId: 'interview'/)
+  assert.match(lab, /modeId: 'presentation'/)
+  assert.match(lab, /Personalisierte Probe starten/)
+  assert.match(practice, /requestCoachTurn/)
+  assert.match(practice, /speech-coach-dialog-history/)
+  assert.match(practice, /abortActiveRequests/)
+  assert.match(practice, /preset\.questions/)
+  assert.doesNotMatch(practice, /\bcv\b/i)
+  assert.doesNotMatch(practice, /stellenanzeige/i)
+  assert.doesNotMatch(practice, /präsentationsnotizen/i)
 })
