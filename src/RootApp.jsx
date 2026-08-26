@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   MessageCircleMore,
   Sparkles,
+  Target,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import AudioStudio from './AudioStudioPro.jsx'
 import ConversationCoach from './ConversationCoach.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
 import TeamCoach from './TeamCoach.jsx'
+import TrainingLab from './TrainingLab.jsx'
 import TrainingPlanCenter from './TrainingPlanCenter.jsx'
 import TrainingPlanCompletionBridge from './TrainingPlanCompletionBridge.jsx'
 import { AuthProvider, useAuth } from './cloud/AuthContext.jsx'
@@ -32,6 +34,7 @@ import './audio-advanced.css'
 import './account.css'
 import './account-security.css'
 import './training-plan.css'
+import './training-lab.css'
 import './launchers.css'
 import './accessibility.css'
 
@@ -39,6 +42,7 @@ const VIEW_LABELS = {
   account: 'Konto und Cloud',
   plan: 'Vier-Wochen-Plan',
   progress: 'Fortschritt',
+  lab: 'Training Lab',
   audio: 'Audio-Labor Pro',
   'team-coach': 'Team-Coach',
   coach: 'Live-Coach',
@@ -83,6 +87,7 @@ function SpeechCoachExperience() {
   const openTeamCoach = () => openView('team-coach')
   const openProgress = () => openView('progress')
   const openPlan = () => openView('plan')
+  const openLab = () => openView('lab')
   const openAudio = () => openView('audio')
   const openAccount = () => openView('account')
 
@@ -192,6 +197,12 @@ function SpeechCoachExperience() {
               <ArrowUpRight size={18} />
             </motion.button>
 
+            <motion.button data-focus-key="lab" className="lab-launcher" onClick={openLab} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+              <span className="lab-launcher-icon"><Target size={21} /></span>
+              <span className="lab-launcher-copy"><strong>Training Lab</strong><small>Baseline · Bewerbung · Q&A</small></span>
+              <ArrowUpRight size={18} />
+            </motion.button>
+
             <motion.button data-focus-key="audio" className="audio-launcher" onClick={openAudio} whileHover={reduceMotion ? undefined : { y: -3 }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
               <span className="audio-launcher-icon"><AudioLines size={22} /></span>
               <span className="audio-launcher-copy"><strong>Audio-Labor Pro</strong><small>Stimme, Pitch und Pausen</small></span>
@@ -218,6 +229,15 @@ function SpeechCoachExperience() {
         {activeView === 'plan' && (
           <TrainingPlanCenter
             key="training-plan"
+            onClose={closeOverlay}
+            onOpenCoach={openCoach}
+            onOpenAudio={openAudio}
+            onOpenSolo={closeOverlay}
+          />
+        )}
+        {activeView === 'lab' && (
+          <TrainingLab
+            key="training-lab"
             onClose={closeOverlay}
             onOpenCoach={openCoach}
             onOpenAudio={openAudio}
