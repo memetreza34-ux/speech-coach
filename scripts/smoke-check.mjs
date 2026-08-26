@@ -22,6 +22,7 @@ const requiredFiles = [
   'src/TrainingLab.jsx',
   'src/training-lab.css',
   'src/contentAnalysis.js',
+  'src/baselineStore.js',
   'src/TrainingPlanCenter.jsx',
   'src/ErrorBoundary.jsx',
   'api/_security.js',
@@ -101,7 +102,16 @@ expect(trainingLab.includes('60-Sekunden-Baseline'), 'Training Lab must retain t
 expect(trainingLab.includes('Lebenslauf + Stellenanzeige'), 'Training Lab must retain personalized interview preparation')
 expect(trainingLab.includes('Notizen → Publikums-Q&A'), 'Training Lab must retain presentation Q&A')
 expect(trainingLab.includes('5-Minuten-Drills'), 'Training Lab must retain quick drills')
-expect(trainingLab.includes("localStorage.setItem('speech-coach-baseline'"), 'baseline must remain locally persisted')
+expect(trainingLab.includes("from './baselineStore.js'"), 'Training Lab must use the privacy-safe baseline store')
+expect(trainingLab.includes('saveBaselineProfile(profile)'), 'Training Lab must persist baseline through the safe store')
+expect(trainingLab.includes('clearBaselineProfile()'), 'Training Lab must allow the active baseline to be deleted')
+
+const baselineStore = read('src/baselineStore.js')
+expect(baselineStore.includes("const GUEST_BASELINE_KEY = 'speech-coach-baseline'"), 'baseline store must retain guest baseline support')
+expect(baselineStore.includes("const USER_BASELINE_PREFIX = 'speech-coach-user-baseline:'"), 'baseline store must scope signed-in baseline data by account')
+expect(baselineStore.includes('sanitizeBaseline'), 'baseline store must sanitize persisted baseline data')
+expect(baselineStore.includes('localStorage.removeItem(GUEST_BASELINE_KEY)'), 'first signed-in owner must migrate the anonymous baseline safely')
+expect(!baselineStore.includes('profile.transcript'), 'baseline store must not persist the raw baseline transcript')
 
 const contentAnalysis = read('src/contentAnalysis.js')
 expect(contentAnalysis.includes('analyseContentQuality'), 'content quality analysis is missing')
@@ -111,7 +121,8 @@ expect(contentAnalysis.includes('HEDGES'), 'content analysis must retain hedging
 expect(contentAnalysis.includes('repeatedPhrases'), 'content analysis must retain repetition indicators')
 
 const progressUtils = read('src/progressUtils.js')
-expect(progressUtils.includes('speech-coach-baseline'), 'progress must read the local baseline')
+expect(progressUtils.includes("import { readBaselineProfile } from './baselineStore.js'"), 'progress must use the account-scoped baseline store')
+expect(progressUtils.includes('const baseline = readBaselineProfile()'), 'progress must read the active baseline profile')
 expect(progressUtils.includes('measuredSkills.pace ??'), 'real measured progress must override baseline fallback')
 expect(progressUtils.includes('baseline,'), 'progress output must expose baseline context')
 
@@ -210,7 +221,15 @@ expect(health.includes("response.setHeader('Cache-Control', 'no-store, max-age=0
 const deployment = JSON.parse(read('vercel.json'))
 const globalHeaders = deployment.headers?.find((entry) => entry.source === '/(.*)')?.headers || []
 const headerKeys = new Set(globalHeaders.map((header) => header.key))
-for (const requiredHeader of ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Permissions-Policy', 'Strict-Transport-Security']) {
+for (const requiredHeader of [
+  'X-Content-Type-Options',
+  'X-Frame-Options',
+  'Referrer-Policy',
+  'Permissions-Policy',
+  'Strict-Transport-Security',
+  'Content-Security-Policy',
+  'Cross-Origin-Opener-Policy',
+]) {
   expect(headerKeys.has(requiredHeader), `missing production response header: ${requiredHeader}`)
 }
 
@@ -218,6 +237,7 @@ const sourceFiles = [
   'src/RootApp.jsx',
   'src/TrainingLab.jsx',
   'src/contentAnalysis.js',
+  'src/baselineStore.js',
   'src/progressUtils.js',
   'src/AudioStudioPro.jsx',
   'src/pitchAnalysis.js',
@@ -248,6 +268,7 @@ const syntaxFiles = [
   'scripts/validate-production-env.mjs',
   'src/audioAnalysis.js',
   'src/contentAnalysis.js',
+  'src/baselineStore.js',
   'src/pitchAnalysis.js',
   'src/progressUtils.js',
   'src/requestLifecycle.js',
