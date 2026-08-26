@@ -2,6 +2,8 @@
 
 Diese Checkliste ist die Freigabebedingung vor einem Merge nach `main` beziehungsweise vor einem öffentlichen Produktionsrelease.
 
+Übergeordnete Anleitung: `docs/MASTER_ROADMAP.md`. Ergänzend gelten `docs/PRODUCT_SPEC.md`, `docs/AI_EVALUATION.md`, `docs/LEGAL_DATA_RELEASE.md` und `docs/OPERATIONS_RELEASE.md`.
+
 ## 1. Automatische Validierung
 
 Lokal oder in GitHub Actions ausführen:
@@ -20,7 +22,7 @@ npm run check
 
 Keinen Release freigeben, wenn einer dieser Schritte fehlschlägt.
 
-Zusätzlich enthält `docs/ACCESSIBILITY.md` die verbindliche Keyboard-, Screenreader-, Reduced-Motion- und Mobile-Prüfung. `docs/PITCH_CALIBRATION.md` enthält die verbindliche reale Kalibrierung der lokalen Tonhöhenanalyse. Automatische Sourcechecks ersetzen diese realen Bedien- und Aufnahmeprüfungen nicht.
+Zusätzlich enthält `docs/ACCESSIBILITY.md` die verbindliche Keyboard-, Screenreader-, Reduced-Motion- und Mobile-Prüfung. `docs/PITCH_CALIBRATION.md` enthält die reale Kalibrierung der lokalen Tonhöhenanalyse. Automatische Sourcechecks ersetzen diese realen Bedien- und Aufnahmeprüfungen nicht.
 
 ## 2. Deployment
 
@@ -43,8 +45,6 @@ Vor einer Freigabe müssen beide Remote-Smoke-Stufen erfolgreich sein:
 1. Preview-Deployment
 2. Production-Deployment
 
-Ausführen mit:
-
 ```bash
 SPEECHCOACH_TARGET_URL=https://preview.example npm run test:deployment
 SPEECHCOACH_TARGET_URL=https://production.example EXPECT_AI_CONFIGURED=true npm run test:deployment
@@ -54,7 +54,7 @@ Bei geschütztem Vercel-Preview zusätzlich `VERCEL_AUTOMATION_BYPASS_SECRET` ve
 
 ### API-Missbrauchsschutz
 
-Die vollständige Betriebsdokumentation liegt unter `docs/API_SECURITY.md`.
+Die vollständige Betriebsdokumentation liegt unter `docs/API_SECURITY.md` und `docs/OPERATIONS_RELEASE.md`.
 
 Vor öffentlicher Freigabe zusätzlich prüfen:
 
@@ -64,9 +64,9 @@ Vor öffentlicher Freigabe zusätzlich prüfen:
 - explizit falscher Content-Type wird mit HTTP 415 abgelehnt
 - überschrittenes In-Code-Limit liefert HTTP 429 und `Retry-After`
 - Fehlerantworten enthalten dieselbe Request-ID wie `X-Request-Id`
-- auf Vercel WAF beziehungsweise einer gleichwertigen verteilten Schutzschicht globale Rate-Limits für die kostenpflichtigen AI-Endpunkte einrichten
-- WAF-Regeln müssen tatsächlich limitieren/deny/challenge und nicht nur protokollieren
-- Serverlogs dürfen keine Gesprächsinhalte, Transkripte, Audiodaten oder Secrets enthalten
+- globales WAF-/Distributed-Rate-Limit aktiv
+- WAF-Regeln limitieren/deny/challenge tatsächlich und loggen nicht nur
+- Serverlogs enthalten keine Gesprächsinhalte, Transkripte, Audiodaten, CVs, Stellenanzeigen, Präsentationsnotizen oder Secrets
 - OpenAI-Nutzung/Kosten auf ungewöhnliche Spitzen überwachen
 
 Der In-Code-Limiter arbeitet pro Serverprozess und ersetzt ausdrücklich kein globales WAF-/Distributed-Rate-Limit.
@@ -121,6 +121,8 @@ Für mindestens ein Thema jeder Simulation prüfen:
 - Abschlussauswertung
 - Speicherung im Dialogverlauf
 
+Zusätzlich das Evaluationsset aus `docs/AI_EVALUATION.md` durchführen.
+
 ## 6. Team-Coach
 
 Alle sechs Gruppensimulationen mindestens einmal starten:
@@ -141,6 +143,7 @@ Zusätzlich prüfen:
 - KI-Modus
 - lokaler Fallback
 - Speicherung als Dialogtraining
+- Prompt-Injection ersetzt keine kanonische Rolle
 
 ## 7. Audio-Labor Pro
 
@@ -168,14 +171,14 @@ Die Detailmatrix steht unter `docs/PITCH_CALIBRATION.md`.
 
 Vor Production mindestens prüfen:
 
-- bewusst monotone Aufnahme erzeugt weniger Pitch-Bewegung als eine expressive Vergleichsaufnahme derselben Person
+- bewusst monotone Aufnahme erzeugt weniger Pitch-Bewegung als expressive Vergleichsaufnahme derselben Person
 - kleine Frame-Jitterbewegungen erzeugen keine künstlich hohe Zahl an Richtungswechseln
 - einzelne ungefähr 2×-/0,5×-Oktavfehler dominieren Tonumfang oder Melodie nicht
-- ruhiger Raum liefert plausibel höheres Messvertrauen als eine deutlich schlechtere/rauschigere Aufnahme
-- geringer Mikrofonabstand und größerer Abstand werden verglichen
+- ruhiger Raum liefert plausibel höheres Messvertrauen als deutlich schlechtere/rauschigere Aufnahme
+- geringer und größerer Mikrofonabstand werden verglichen
 - Laptop-/Desktop-Mikrofon und Smartphone-Mikrofon werden geprüft
 - mindestens eine tiefere und eine höhere Sprechstimme werden geprüft
-- bei geringer `analysisConfidence` beeinflussen Pitch-Werte den kombinierten Audio-Score sichtbar weniger stark
+- bei geringer `analysisConfidence` beeinflussen Pitch-Werte den kombinierten Audio-Score weniger stark
 - bei zu wenig stabilen stimmhaften Frames bleibt die übrige lokale Audioanalyse nutzbar
 - hörbarer Eindruck und angezeigte Kurve werden manuell miteinander verglichen
 
@@ -184,20 +187,77 @@ Vor Production mindestens prüfen:
 Mit WebM und – falls vom Zielbrowser erzeugt – MP4/M4A prüfen:
 
 - standardmäßig deaktiviert
-- Opt-in gilt nur für die aktuelle Aufnahme
+- Opt-in gilt nur für aktuelle Aufnahme
 - `/api/transcribe` funktioniert mit echtem Server-Key
 - Wort-Zeitmarken werden angezeigt
 - Klick auf Textgruppe springt an passende Audiostelle
 - Fehler der Servertranskription zerstört lokale Analyse nicht
-- 429 zeigt einen kontrollierten Hinweis und eine Referenz-ID
+- 429 zeigt kontrollierten Hinweis und Referenz-ID
 - >3-MB-Aufnahme wird kontrolliert abgelehnt
 - Audiodatei erscheint nicht im Local Storage
 - Audiodatei erscheint nicht in Supabase
 - Wort-Zeitmarken erscheinen nicht in gespeicherten Sessions
 
-## 8. Fortschritt und Vier-Wochen-Plan
+## 8. Training Lab
+
+### Baseline
+
+- Training Lab öffnet aus dem siebten Hauptlauncher
+- 60-Sekunden-Aufgabe startet
+- Mikrofonfreigabe funktioniert
+- verweigerte Freigabe zeigt verständlichen Fehler
+- Browser ohne Speech Recognition zeigt kontrollierten Unsupported-State
+- vorzeitiges Stoppen funktioniert
+- automatische Beendigung funktioniert
+- Startprofil zeigt Tempo, Füllwortkontrolle, Klarheit, Struktur und Wirkung
+- zwei schwächste Bereiche werden angezeigt
+- Baseline wird lokal gespeichert
+- Baseline erhöht nicht künstlich Streak oder Session-Zähler
+- solange reale Skillwerte fehlen, kann Baseline Fortschritt/Plan initialisieren
+- reale Trainingswerte haben Vorrang vor Baseline-Fallbacks
+
+### Inhaltsanalyse 2.0
+
+- ohne Solo-Transkript erscheint Empty State
+- vorhandene Solo-Session kann ausgewählt werden
+- Präzision erscheint
+- Struktur erscheint
+- Conciseness/Kürze erscheint
+- Beleg-/Beispielindikator erscheint
+- Hedging/Abschwächungen werden bei passenden Texten erkannt
+- Wiederholungen werden nur als Trainingshinweis dargestellt
+- UI behauptet keine Faktenprüfung oder Persönlichkeitsanalyse
+
+### Bewerbung personalisieren
+
+- Erfahrung/CV als Text einfügen
+- Stellenanzeige als Text einfügen
+- kleine `.txt/.md/.csv`-Datei kann lokal gelesen werden
+- sechs Fragen werden erzeugt
+- gemeinsame/fehlende Schlüsselbegriffe sind plausibel
+- Übergang zum Live-Coach funktioniert
+- CV- und Stellenanzeigentext werden nicht automatisch in Supabase/Cloud-Historie gespeichert
+- keine Eignungsprozentzahl oder Bewerberranking
+
+### Präsentations-Q&A
+
+- Notizen/Pitch einfügen
+- fünf Vorab-Checks erscheinen
+- fünf kritische Fragen erscheinen
+- Übergang zum Live-Coach funktioniert
+- Notizen werden nicht automatisch in Cloud-Historie geschrieben
+
+### 5-Minuten-Drills
+
+- alle sechs Drills sichtbar
+- Texte sind auf Smartphone vollständig lesbar
+- Solo/Live-Coach/Audio-Labor-Ziele funktionieren
+
+## 9. Fortschritt und Vier-Wochen-Plan
 
 - Solo-, Audio-, Live-Coach- und Team-Coach-Sitzungen erscheinen korrekt
+- Baseline-Fallback funktioniert vor den ersten echten Skillmessungen
+- reale Sessions ersetzen Baseline-Fallback je Fähigkeit
 - Wochenziel korrekt
 - Streak korrekt
 - sieben Kernfähigkeiten plausibel
@@ -205,13 +265,13 @@ Mit WebM und – falls vom Zielbrowser erzeugt – MP4/M4A prüfen:
 - Plan erzeugt vier Wochen
 - Wochenziel wird auf drei bis sieben Einheiten begrenzt
 - drei schwächste Fähigkeiten werden priorisiert
-- Aufgabenstart öffnet den richtigen Trainingsmodus
+- Aufgabenstart öffnet richtigen Trainingsmodus
 - abgeschlossene Aufgabe wird automatisch markiert
 - manuelles Abhaken und Wiederöffnen funktioniert
 - Aufgabenstart eines vorherigen Kontos wird nicht übernommen
 - 12-Stunden-Ablauf aktiver Planaufgabe prüfen
 
-## 9. Cloud-Synchronisierung
+## 10. Cloud-Synchronisierung
 
 Mit zwei Browserprofilen oder zwei Geräten prüfen:
 
@@ -226,22 +286,26 @@ Mit zwei Browserprofilen oder zwei Geräten prüfen:
 - pausierter Sync lädt oder schreibt keinen Plan
 - Transkript-Opt-in respektieren
 - Audiodateien niemals synchronisieren
+- Training-Lab-CV/Stellenanzeige/Präsentationsnotizen werden in v1 nicht automatisch synchronisiert
 
-## 10. Datenschutz und Löschung
+## 11. Datenschutz und Löschung
 
 Mit Wegwerf-Testkonto prüfen:
 
+- `docs/LEGAL_DATA_RELEASE.md` abgearbeitet
 - JSON-Export enthält erwartete Profil-/Trainings-/Plandaten
 - JSON-Export enthält keine Audiodatei
 - lokales Löschen entfernt lokale Historie und Plan
+- Baseline-Löschverhalten ist definiert und geprüft
 - Cloud-Löschen entfernt Cloud-Sitzungen und Cloud-Plan
 - Sync wird nach Löschung pausiert
 - gelöschte Daten erscheinen nicht sofort erneut
 - endgültige Kontolöschung verlangt korrekte E-Mail und `KONTO LÖSCHEN`
 - Konto ist danach nicht mehr anmeldbar
 - zugehörige SpeechCoach-Zeilen sind durch Cascade entfernt
+- öffentliche Legal-/Datenschutzseiten enthalten keine Platzhalter
 
-## 11. Fehler-, Offline- und Abbruchverhalten
+## 12. Fehler-, Offline- und Abbruchverhalten
 
 Gezielt testen:
 
@@ -254,17 +318,18 @@ Gezielt testen:
 - Browser ohne Speech Recognition
 - Browser ohne MediaRecorder
 - Präzisionstranskription schlägt fehl
-- Live-Coach-Antwort absenden und die Ansicht während der laufenden KI-Anfrage per Schließen oder Escape verlassen; die Anfrage wird abgebrochen und keine verspätete Coach-Antwort erscheint
-- Team-Coach-Antwort absenden und die Ansicht während der laufenden KI-Anfrage verlassen; die Anfrage wird abgebrochen und keine verspätete Team-Antwort erscheint
-- Audio-Labor während einer noch offenen Mikrofonfreigabe verlassen; ein später erteilter Zugriff darf keine Aufnahme mehr starten
-- Audio-Labor während Pitch-/Präzisionsanalyse verlassen; Präzisionstranskription wird abgebrochen und es darf keine nachträgliche Audio-Session gespeichert werden
-- Audio-Labor während Aufnahme verlassen; MediaRecorder, Speech Recognition, MediaStream und AudioContext werden beendet
-- nach einem abgebrochenen Coach-, Team- oder Audio-Vorgang denselben Modus erneut öffnen und erfolgreich neu starten
-- Seite während einer laufenden AI-Anfrage verlassen oder neu laden; aktive Requests werden über den Lifecycle abgebrochen
-- absichtlich ausgelöster React-Renderfehler in einer lokalen Testversion zeigt die Error Boundary statt einer weißen Seite
-- Neuladen nach Fehler stellt die Anwendung wieder her
+- Live-Coach-Antwort absenden und Ansicht während laufender KI-Anfrage verlassen; keine verspätete Antwort
+- Team-Coach-Antwort absenden und Ansicht während laufender KI-Anfrage verlassen; keine verspätete Antwort
+- Audio-Labor während offener Mikrofonfreigabe verlassen; späterer Zugriff startet keine Aufnahme
+- Audio-Labor während Pitch-/Präzisionsanalyse verlassen; keine nachträgliche Audio-Session
+- Audio-Labor während Aufnahme verlassen; Recorder/Recognition/Stream/AudioContext enden
+- Training-Lab-Baseline während Aufnahme per Escape schließen; Spracherkennung endet
+- nach abgebrochenem Coach-, Team-, Audio- oder Baseline-Vorgang Modus neu öffnen und erfolgreich starten
+- Seite während laufender AI-Anfrage verlassen/neuladen; Lifecycle bricht Requests ab
+- absichtlich ausgelöster React-Renderfehler zeigt Error Boundary statt weißer Seite
+- Neuladen nach Fehler stellt Anwendung wieder her
 
-## 12. Responsive und Accessibility
+## 13. Responsive und Accessibility
 
 Die Detailprüfung steht zusätzlich unter `docs/ACCESSIBILITY.md`.
 
@@ -275,33 +340,39 @@ Mindestens prüfen:
 - Tablet
 - 1366 px Desktop
 - großer Desktop
-- alle sechs Launcher nur mit Tastatur öffnen
+- alle sieben Launcher nur mit Tastatur öffnen
+- kein horizontaler Zwangsscroll durch sieben Launcher auf 360 px
 - aktive Vollbildansicht mit Escape schließen
-- Fokus kehrt auf den ursprünglichen Launcher zurück
+- Fokus kehrt auf ursprünglichen Launcher zurück
 - sichtbare Fokuszustände auf Buttons, Links und Formularfeldern
-- Dialog-/Ansichtswechsel wird vom eingesetzten Screenreader nachvollziehbar angekündigt
+- Dialog-/Ansichtswechsel wird vom Screenreader nachvollziehbar angekündigt
 - Screenreader-Namen für zentrale Icon-Aktionen
+- Training-Lab-Textareas/Select/File-Aktionen erreichbar
 - keine abgeschnittenen Hauptaktionen
 - `prefers-reduced-motion: reduce` ohne kritische Funktionsverluste
-- zentrale Touch-Icon-Aktionen auf grobem Pointer mindestens 44 × 44 px
+- zentrale Touch-Icon-Aktionen mindestens 44 × 44 px
 - ausreichende Textkontraste
 
 ## Release-Gate
 
 Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 
-1. `npm run check` erfolgreich durchläuft.
-2. `npm run check:env` mit der echten Production-Konfiguration erfolgreich durchläuft.
-3. der Remote-Smoke gegen ein echtes Preview-Deployment erfolgreich ist.
-4. die produktive HTTPS-Domain konfiguriert ist.
-5. Auth-End-to-End mit einem Testkonto funktioniert.
+1. `npm run check` tatsächlich erfolgreich durchläuft.
+2. `npm run check:env` mit echter Production-Konfiguration erfolgreich durchläuft.
+3. Remote-Smoke gegen echtes Preview erfolgreich ist.
+4. produktive HTTPS-Domain konfiguriert ist.
+5. Auth-End-to-End mit Testkonto funktioniert.
 6. beide Coach-Endpunkte mit echtem API-Key getestet sind.
 7. `/api/transcribe` mit echter Aufnahme getestet ist.
-8. Cloud-Sync auf zwei Geräten geprüft ist.
-9. Konto- und Datenlöschung mit einem Wegwerf-Testkonto geprüft ist.
-10. kritische Mobile- und Desktop-Flows manuell geprüft sind.
-11. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
-12. globale WAF-/Distributed-Rate-Limits für die kostenpflichtigen AI-Endpunkte aktiv und getestet sind.
-13. die Abbruch-/Race-Condition-Tests aus Abschnitt 11 auf echter Browser-Hardware erfolgreich sind.
-14. die reale Pitch-Kalibrierung aus `docs/PITCH_CALIBRATION.md` mit mehreren Stimmen/Mikrofonen erfolgreich durchgeführt und dokumentiert ist.
-15. nach Production-Deployment der Remote-Smoke gegen die finale URL erfolgreich ist.
+8. Training Lab inklusive Baseline/Inhaltsanalyse/Bewerbung/Q&A auf Desktop und Smartphone getestet ist.
+9. Baseline-Fallback im Fortschritt/Plan real geprüft ist.
+10. AI-Evaluation aus `docs/AI_EVALUATION.md` akzeptabel ist.
+11. Cloud-Sync auf zwei Geräten geprüft ist.
+12. Konto-/Datenlöschung mit Wegwerf-Testkonto geprüft ist.
+13. Legal-/Data-Gate aus `docs/LEGAL_DATA_RELEASE.md` abgeschlossen ist.
+14. Kosten-/Monitoring-/Browser-Gate aus `docs/OPERATIONS_RELEASE.md` abgeschlossen ist.
+15. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
+16. globale WAF-/Distributed-Rate-Limits aktiv und getestet sind.
+17. Abbruch-/Race-Condition-Tests auf echter Browser-Hardware erfolgreich sind.
+18. reale Pitch-Kalibrierung mit mehreren Stimmen/Mikrofonen durchgeführt und dokumentiert ist.
+19. nach Production-Deployment der Remote-Smoke gegen finale URL erfolgreich ist.
