@@ -192,16 +192,33 @@ Production:
 
 ## 10. CSP/Supply Chain
 
-Aktuell ist das gepinnte Supabase-SDK als externer Runtime-ESM-Import vorhanden. Für eine strengere CSP ist geplant:
+`vercel.json` setzt inzwischen eine konservative Content-Security-Policy mit:
+
+- `default-src 'self'`
+- `base-uri 'self'`
+- `object-src 'none'`
+- `frame-ancestors 'none'`
+- `form-action 'self'`
+- `script-src 'self' https://cdn.jsdelivr.net`
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co`
+- `media-src 'self' blob:`
+- `worker-src 'self' blob:`
+
+Zusätzlich sind `Cross-Origin-Opener-Policy: same-origin` und `X-Permitted-Cross-Domain-Policies: none` aktiv.
+
+Der Remote-Deployment-Smoke prüft die wichtigsten CSP-Direktiven. Diese Policy muss auf einem echten Preview gegen Auth, Training Lab, Audio und Coach getestet werden, bevor Production freigegeben wird.
+
+### Noch offen: Runtime-CDN entfernen
+
+Das gepinnte Supabase-SDK wird aktuell noch als externer Runtime-ESM-Import von jsDelivr geladen. Nächster Supply-Chain-Schritt nach funktionierendem Preview:
 
 1. `@supabase/supabase-js` als normale Build-Abhängigkeit bundlen.
 2. externen Runtime-CDN-Import entfernen.
-3. Preview mit strenger CSP testen.
-4. `script-src` ohne unnötige externe Hosts.
-5. `connect-src` auf eigene API/Supabase beschränken.
-6. `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`.
+3. jsDelivr aus `script-src` entfernen.
+4. Preview erneut vollständig testen.
+5. CSP danach weiter minimieren.
 
-Diese Änderung nicht blind erzwingen, solange Auth/Audio/Preview nicht dagegen getestet wurden.
+Die CSP darf nicht blind weiter verschärft werden, solange Auth/Audio/Preview nicht dagegen getestet wurden.
 
 ## 11. Release-Entscheidung
 
@@ -210,6 +227,7 @@ Nicht veröffentlichen, wenn:
 - CI nicht tatsächlich gelaufen ist
 - Production-Build nicht gelaufen ist
 - Preview fehlt
+- CSP nicht im echten Preview getestet ist
 - Browser-E2E offen ist
 - Rate-Limits fehlen
 - Löschflow ungeprüft ist
