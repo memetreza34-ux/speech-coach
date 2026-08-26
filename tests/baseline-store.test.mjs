@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  adoptGuestBaselineForActiveOwner,
   clearBaselineProfile,
   readBaselineProfile,
   saveBaselineProfile,
@@ -37,6 +38,27 @@ test('baseline persistence strips raw transcript and content details', () => {
     assert.equal('transcript' in raw, false)
     assert.equal('content' in raw, false)
     assert.equal(raw.skills.pace, 75)
+  } finally {
+    if (previousStorage === undefined) delete global.localStorage
+    else global.localStorage = previousStorage
+  }
+})
+
+test('guest baseline is claimed immediately once an account becomes active', () => {
+  const previousStorage = global.localStorage
+  global.localStorage = createStorage({
+    'speech-coach-baseline': JSON.stringify(profile(64)),
+    'speech-coach-active-local-owner': 'user-a',
+  })
+  try {
+    const adopted = adoptGuestBaselineForActiveOwner()
+    assert.equal(adopted.overall, 64)
+    assert.equal(global.localStorage.getItem('speech-coach-baseline'), null)
+    assert.ok(global.localStorage.getItem('speech-coach-user-baseline:user-a'))
+
+    global.localStorage.setItem('speech-coach-active-local-owner', 'user-b')
+    assert.equal(adoptGuestBaselineForActiveOwner(), null)
+    assert.equal(readBaselineProfile(), null)
   } finally {
     if (previousStorage === undefined) delete global.localStorage
     else global.localStorage = previousStorage
