@@ -38,7 +38,10 @@ const sanitizeBaseline = (profile) => {
       .map(([key, value]) => [key, Math.max(0, Math.min(100, Math.round(Number(value))))]))
     : {}
   const weakest = Array.isArray(profile.weakest)
-    ? profile.weakest.slice(0, 3).map((item) => ({ key: String(item?.key || ''), value: Math.max(0, Math.min(100, Math.round(Number(item?.value) || 0))) })).filter((item) => item.key)
+    ? profile.weakest.slice(0, 3).map((item) => ({
+      key: String(item?.key || ''),
+      value: Math.max(0, Math.min(100, Math.round(Number(item?.value) || 0))),
+    })).filter((item) => item.key)
     : []
 
   return {
@@ -56,9 +59,9 @@ const dispatchChanged = (source) => {
   window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source } }))
 }
 
-export const readBaselineProfile = () => {
+export const adoptGuestBaselineForActiveOwner = () => {
   const ownerId = activeOwner()
-  if (!ownerId) return safeReadObject(GUEST_BASELINE_KEY)
+  if (!ownerId) return null
 
   const userKey = keyForOwner(ownerId)
   const existing = safeReadObject(userKey)
@@ -68,10 +71,16 @@ export const readBaselineProfile = () => {
   if (!anonymous) return null
 
   const sanitized = sanitizeBaseline(anonymous)
-  if (sanitized && safeWrite(userKey, sanitized)) {
-    try { localStorage.removeItem(GUEST_BASELINE_KEY) } catch { /* storage is optional */ }
-  }
+  if (!sanitized || !safeWrite(userKey, sanitized)) return null
+
+  try { localStorage.removeItem(GUEST_BASELINE_KEY) } catch { /* storage is optional */ }
   return sanitized
+}
+
+export const readBaselineProfile = () => {
+  const ownerId = activeOwner()
+  if (!ownerId) return safeReadObject(GUEST_BASELINE_KEY)
+  return safeReadObject(keyForOwner(ownerId)) || adoptGuestBaselineForActiveOwner()
 }
 
 export const saveBaselineProfile = (profile) => {
@@ -99,6 +108,10 @@ export const getBaselineStorageInfo = () => ({
 
 if (typeof window !== 'undefined') {
   window.addEventListener('speechcoach:data-changed', (event) => {
+    if (event.detail?.source === 'account-activated') {
+      adoptGuestBaselineForActiveOwner()
+      return
+    }
     if (event.detail?.source !== 'privacy-center') return
     clearBaselineProfile({ notify: false })
     window.queueMicrotask(() => dispatchChanged('baseline-cleared-by-privacy'))
