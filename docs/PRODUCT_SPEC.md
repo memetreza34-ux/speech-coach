@@ -37,7 +37,9 @@ In höchstens zwei Minuten verstehen, wo der erste Trainingsfokus liegt.
 - Struktur
 - Wirkung
 - zwei schwächste Bereiche
-- lokales Speichern
+- account-getrenntes lokales Startprofil
+- Rohtranskript wird nach der Auswertung nicht dauerhaft gespeichert
+- Baseline kann separat exportiert und gelöscht werden
 - Fortschritt nutzt Baseline nur als Fallback, bis echte Messwerte vorhanden sind
 
 ### Akzeptanz
@@ -48,6 +50,9 @@ In höchstens zwei Minuten verstehen, wo der erste Trainingsfokus liegt.
 - Unmount stoppt Spracherkennung
 - Baseline darf Streak/Trainingsanzahl nicht künstlich erhöhen
 - echte Sessions haben Vorrang vor Baseline
+- Kontowechsel darf keine Baseline eines anderen Kontos sichtbar machen
+- anonyme Baseline darf beim ersten Login kontrolliert vom ersten Konto übernommen werden
+- gespeichertes Baseline-Objekt enthält kein Rohtranskript und keine detaillierte Inhaltsanalyse
 
 ## Feature: Inhaltsanalyse 2.0
 
@@ -77,7 +82,7 @@ Nicht nur Tempo/Füllwörter sehen, sondern erkennen, ob die Antwort sprachlich 
 
 ### Nutzerziel
 
-Aus eigenen Erfahrungen und einer echten Stellenanzeige relevante Fragen erhalten.
+Aus eigenen Erfahrungen und einer echten Stellenanzeige relevante Fragen erhalten und diese direkt trainieren.
 
 ### v1
 
@@ -87,14 +92,27 @@ Aus eigenen Erfahrungen und einer echten Stellenanzeige relevante Fragen erhalte
 - Schlüsselbegriffe lokal ableiten
 - sechs personalisierte Fragen
 - gemeinsame und fehlende Schlüsselbegriffe sichtbar machen
-- Übergang zum Live-Coach
+- personalisierte Probe mit bis zu fünf Fragen
+- Texteingabe und Browser-Spracheingabe in der Probe
+- TTS für die aktuelle Frage
+- Coach-Feedback und Scores für Klarheit, Struktur und Wirkung
+- KI-Modus mit bestehendem Coach-Endpunkt plus lokaler Fallback
+- Abschlussauswertung der personalisierten Probe
+- Ergebnis wird als Dialogtraining in den normalen Fortschritt übernommen
+
+### Datenschutz
+
+- CV und Stellenanzeige bleiben im Training Lab lokal
+- sie werden nicht automatisch in Local-History, Supabase oder Cloud-Sessions geschrieben
+- beim bewussten Start der personalisierten Probe werden nur die lokal erzeugte Frage und die Nutzerantwort an die bestehende Coach-Auswertung gesendet
+- keine automatische Übertragung des Roh-CV oder der vollständigen Stellenanzeige an OpenAI
 
 ### v1.1
 
 - PDF/DOCX sicher extrahieren
-- Session-Context automatisch in den Live-Coach übergeben
 - STAR-spezifische Scorecard
 - gespeicherte Bewerbungsvorlagen optional
+- stärkerer Vergleich zwischen Stellenanforderung und trainierter Antwort ohne Eignungsranking
 
 ### Nicht bauen
 
@@ -114,7 +132,10 @@ Vor einer Präsentation die wahrscheinlich schwierigsten Rückfragen trainieren.
 - Kernthemen lokal ableiten
 - fünf kritische Fragen
 - fünf Punkte Vorab-Checkliste
-- Übergang zum Live-Coach
+- personalisierte Q&A-Probe mit Sprache/Text/TTS
+- Coach-Feedback und Klarheit-/Struktur-/Wirkungs-Scores
+- Ergebnis wird als Dialogtraining gespeichert
+- vollständige Präsentationsnotizen werden nicht automatisch an die Coach-API übertragen
 
 ### v1.1
 
