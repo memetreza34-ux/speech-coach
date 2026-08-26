@@ -31,6 +31,7 @@ import {
   QUICK_DRILLS,
 } from './contentAnalysis.js'
 import { clearBaselineProfile, readBaselineProfile, saveBaselineProfile } from './baselineStore.js'
+import PersonalizedPractice from './PersonalizedPractice.jsx'
 
 const BASELINE_DURATION = 60
 
@@ -235,7 +236,7 @@ function ContentInsights() {
   )
 }
 
-function InterviewBuilder({ onOpenCoach }) {
+function InterviewBuilder({ onStartPractice }) {
   const [cv, setCv] = useState('')
   const [job, setJob] = useState('')
   const result = useMemo(() => cv.trim() && job.trim() ? buildInterviewQuestions(cv, job) : null, [cv, job])
@@ -254,12 +255,12 @@ function InterviewBuilder({ onOpenCoach }) {
         <label className="lab-field"><span>Lebenslauf / Erfahrung</span><textarea value={cv} onChange={(event) => setCv(event.target.value)} placeholder="Ausbildung, Erfahrung, Projekte, Stärken …" /><em><FileText size={14} /> Textdatei laden <input type="file" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" onChange={readTextFile(setCv)} /></em></label>
         <label className="lab-field"><span>Stellenanzeige</span><textarea value={job} onChange={(event) => setJob(event.target.value)} placeholder="Aufgaben, Anforderungen, gewünschte Fähigkeiten …" /><em><FileText size={14} /> Textdatei laden <input type="file" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" onChange={readTextFile(setJob)} /></em></label>
       </div>
-      {result && <div className="builder-result"><div className="lab-tags">{result.jobKeywords.slice(0, 6).map((item) => <span key={item}>{item}</span>)}</div><ol>{result.questions.map((question) => <li key={question}>{question}</li>)}</ol><button className="lab-primary" onClick={onOpenCoach}><MessageSquare size={18} /> Im Live-Coach üben <ArrowRight size={17} /></button></div>}
+      {result && <div className="builder-result"><div className="lab-tags">{result.jobKeywords.slice(0, 6).map((item) => <span key={item}>{item}</span>)}</div><ol>{result.questions.map((question) => <li key={question}>{question}</li>)}</ol><button className="lab-primary" onClick={() => onStartPractice({ modeId: 'interview', title: 'Personalisierte Bewerbungssimulation', questions: result.questions })}><MessageSquare size={18} /> Personalisierte Probe starten <ArrowRight size={17} /></button></div>}
     </section>
   )
 }
 
-function PresentationBuilder({ onOpenCoach }) {
+function PresentationBuilder({ onStartPractice }) {
   const [notes, setNotes] = useState('')
   const result = useMemo(() => notes.trim() ? buildPresentationQuestions(notes) : null, [notes])
 
@@ -267,7 +268,7 @@ function PresentationBuilder({ onOpenCoach }) {
     <section className="lab-panel">
       <div className="lab-panel-heading"><span><Presentation size={20} /></span><div><small>Präsentation 2.0</small><h2>Notizen → Publikums-Q&A</h2><p>Bereite kritische Rückfragen vor, bevor du vor echtem Publikum präsentierst.</p></div></div>
       <label className="lab-field"><span>Präsentationsnotizen oder Folieninhalt</span><textarea className="presentation-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Füge hier Kernaussagen, Foliennotizen oder deinen Pitch ein …" /></label>
-      {result && <div className="presentation-result"><div><strong><Clipboard size={17} /> Vorher prüfen</strong>{result.checklist.map((item) => <p key={item}><CheckCircle size={15} /> {item}</p>)}</div><div><strong><MessageSquare size={17} /> Kritische Fragen</strong>{result.questions.map((item) => <p key={item}>{item}</p>)}</div><button className="lab-primary" onClick={onOpenCoach}>Q&A im Live-Coach trainieren <ArrowRight size={17} /></button></div>}
+      {result && <div className="presentation-result"><div><strong><Clipboard size={17} /> Vorher prüfen</strong>{result.checklist.map((item) => <p key={item}><CheckCircle size={15} /> {item}</p>)}</div><div><strong><MessageSquare size={17} /> Kritische Fragen</strong>{result.questions.map((item) => <p key={item}>{item}</p>)}</div><button className="lab-primary" onClick={() => onStartPractice({ modeId: 'presentation', title: 'Personalisierte Präsentations-Q&A', questions: result.questions })}>Personalisierte Q&A-Probe starten <ArrowRight size={17} /></button></div>}
     </section>
   )
 }
@@ -284,6 +285,7 @@ function QuickDrills({ onOpenSolo, onOpenCoach, onOpenAudio }) {
 
 export default function TrainingLab({ onClose, onOpenSolo, onOpenCoach, onOpenAudio }) {
   const [baseline, setBaseline] = useState(readBaselineProfile)
+  const [practice, setPractice] = useState(null)
 
   useEffect(() => {
     const refresh = () => setBaseline(readBaselineProfile())
@@ -295,13 +297,19 @@ export default function TrainingLab({ onClose, onOpenSolo, onOpenCoach, onOpenAu
     <motion.div className="training-lab-overlay" role="dialog" aria-modal="true" aria-label="Training Lab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <LabHeader onClose={onClose} />
       <main className="training-lab-content">
-        <section className="training-lab-hero"><div className="training-lab-eyebrow"><Sparkles size={15} /> Persönlicher als Standardübungen</div><h1>Trainiere genau das, <span>was dir noch fehlt.</span></h1><p>Baseline, Inhaltsanalyse, Bewerbungspersonalisierung, Präsentations-Q&A und schnelle Warm-ups in einem Bereich.</p></section>
-        <BaselineCard baseline={baseline} onOpenSolo={onOpenSolo} onOpenAudio={onOpenAudio} />
-        <ContentInsights />
-        <InterviewBuilder onOpenCoach={onOpenCoach} />
-        <PresentationBuilder onOpenCoach={onOpenCoach} />
-        <QuickDrills onOpenSolo={onOpenSolo} onOpenCoach={onOpenCoach} onOpenAudio={onOpenAudio} />
-        <p className="training-lab-note">Die Inhaltsanalyse nutzt transparente sprachliche Heuristiken. Sie bewertet keine Persönlichkeit, Emotionen, Eignung oder psychischen Zustände. Das Baseline-Rohtranskript wird nach der Auswertung nicht dauerhaft gespeichert. Bewerbungstexte und Präsentationsnotizen werden in diesem Bereich nicht automatisch in die Cloud geschrieben.</p>
+        {practice ? (
+          <PersonalizedPractice preset={practice} onBack={() => setPractice(null)} />
+        ) : (
+          <>
+            <section className="training-lab-hero"><div className="training-lab-eyebrow"><Sparkles size={15} /> Persönlicher als Standardübungen</div><h1>Trainiere genau das, <span>was dir noch fehlt.</span></h1><p>Baseline, Inhaltsanalyse, Bewerbungspersonalisierung, Präsentations-Q&A und schnelle Warm-ups in einem Bereich.</p></section>
+            <BaselineCard baseline={baseline} onOpenSolo={onOpenSolo} onOpenAudio={onOpenAudio} />
+            <ContentInsights />
+            <InterviewBuilder onStartPractice={setPractice} />
+            <PresentationBuilder onStartPractice={setPractice} />
+            <QuickDrills onOpenSolo={onOpenSolo} onOpenCoach={onOpenCoach} onOpenAudio={onOpenAudio} />
+            <p className="training-lab-note">Die Inhaltsanalyse nutzt transparente sprachliche Heuristiken. Sie bewertet keine Persönlichkeit, Emotionen, Eignung oder psychischen Zustände. Das Baseline-Rohtranskript wird nach der Auswertung nicht dauerhaft gespeichert. Bewerbungstexte und Präsentationsnotizen bleiben lokal. Erst beim bewussten Start einer personalisierten Probe werden die daraus lokal erzeugten Fragen und deine Antworten an die vorhandene Coach-Auswertung gesendet.</p>
+          </>
+        )}
       </main>
     </motion.div>
   )
