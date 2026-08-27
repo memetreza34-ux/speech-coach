@@ -63,6 +63,31 @@ test('legacy guest baseline is sanitized before it can be shown or exported', ()
   }
 })
 
+test('signed-in baseline reads are sanitized and unknown skills are removed', () => {
+  const previousStorage = global.localStorage
+  const unsafe = {
+    ...profile(77),
+    skills: { ...profile(77).skills, secretMetric: 99 },
+    weakest: [{ key: 'secretMetric', value: 99 }, { key: 'clarity', value: 62 }],
+  }
+  global.localStorage = createStorage({
+    'speech-coach-active-local-owner': 'user-a',
+    'speech-coach-user-baseline:user-a': JSON.stringify(unsafe),
+  })
+  try {
+    const loaded = readBaselineProfile()
+    const raw = JSON.parse(global.localStorage.getItem('speech-coach-user-baseline:user-a'))
+    assert.equal('transcript' in loaded, false)
+    assert.equal('content' in loaded, false)
+    assert.equal('secretMetric' in loaded.skills, false)
+    assert.equal('secretMetric' in raw.skills, false)
+    assert.deepEqual(loaded.weakest, [{ key: 'clarity', value: 62 }])
+  } finally {
+    if (previousStorage === undefined) delete global.localStorage
+    else global.localStorage = previousStorage
+  }
+})
+
 test('guest baseline is claimed immediately once an account becomes active', () => {
   const previousStorage = global.localStorage
   global.localStorage = createStorage({
