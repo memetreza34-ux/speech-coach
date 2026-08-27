@@ -54,6 +54,19 @@ const sanitizeBaseline = (profile) => {
   }
 }
 
+const readGuestBaseline = () => {
+  const guest = safeReadObject(GUEST_BASELINE_KEY)
+  if (!guest) return null
+
+  const sanitized = sanitizeBaseline(guest)
+  if (!sanitized) return null
+
+  // Older builds could persist transcript/content on the guest key. Rewriting on read
+  // guarantees those legacy fields disappear before the profile is shown or exported.
+  safeWrite(GUEST_BASELINE_KEY, sanitized)
+  return sanitized
+}
+
 const dispatchChanged = (source) => {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source } }))
@@ -67,19 +80,18 @@ export const adoptGuestBaselineForActiveOwner = () => {
   const existing = safeReadObject(userKey)
   if (existing) return existing
 
-  const anonymous = safeReadObject(GUEST_BASELINE_KEY)
+  const anonymous = readGuestBaseline()
   if (!anonymous) return null
 
-  const sanitized = sanitizeBaseline(anonymous)
-  if (!sanitized || !safeWrite(userKey, sanitized)) return null
+  if (!safeWrite(userKey, anonymous)) return null
 
   try { localStorage.removeItem(GUEST_BASELINE_KEY) } catch { /* storage is optional */ }
-  return sanitized
+  return anonymous
 }
 
 export const readBaselineProfile = () => {
   const ownerId = activeOwner()
-  if (!ownerId) return safeReadObject(GUEST_BASELINE_KEY)
+  if (!ownerId) return readGuestBaseline()
   return safeReadObject(keyForOwner(ownerId)) || adoptGuestBaselineForActiveOwner()
 }
 
