@@ -1,6 +1,7 @@
 const GUEST_BASELINE_KEY = 'speech-coach-baseline'
 const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
 const USER_BASELINE_PREFIX = 'speech-coach-user-baseline:'
+const ALLOWED_SKILLS = new Set(['pace', 'fillerControl', 'clarity', 'structure', 'impact'])
 
 const safeReadObject = (key) => {
   try {
@@ -34,14 +35,14 @@ const sanitizeBaseline = (profile) => {
   if (!profile || typeof profile !== 'object') return null
   const skills = profile.skills && typeof profile.skills === 'object'
     ? Object.fromEntries(Object.entries(profile.skills)
-      .filter(([, value]) => Number.isFinite(Number(value)))
+      .filter(([key, value]) => ALLOWED_SKILLS.has(key) && Number.isFinite(Number(value)))
       .map(([key, value]) => [key, Math.max(0, Math.min(100, Math.round(Number(value))))]))
     : {}
   const weakest = Array.isArray(profile.weakest)
     ? profile.weakest.slice(0, 3).map((item) => ({
       key: String(item?.key || ''),
       value: Math.max(0, Math.min(100, Math.round(Number(item?.value) || 0))),
-    })).filter((item) => item.key)
+    })).filter((item) => ALLOWED_SKILLS.has(item.key))
     : []
 
   return {
@@ -54,18 +55,20 @@ const sanitizeBaseline = (profile) => {
   }
 }
 
-const readGuestBaseline = () => {
-  const guest = safeReadObject(GUEST_BASELINE_KEY)
-  if (!guest) return null
+const readSanitizedBaseline = (key) => {
+  const stored = safeReadObject(key)
+  if (!stored) return null
 
-  const sanitized = sanitizeBaseline(guest)
+  const sanitized = sanitizeBaseline(stored)
   if (!sanitized) return null
 
-  // Older builds could persist transcript/content on the guest key. Rewriting on read
-  // guarantees those legacy fields disappear before the profile is shown or exported.
-  safeWrite(GUEST_BASELINE_KEY, sanitized)
+  // Every read is also a migration: legacy/raw or unexpected fields are removed
+  // before the baseline can be shown, exported or adopted by an account.
+  safeWrite(key, sanitized)
   return sanitized
 }
+
+const readGuestBaseline = () => readSanitizedBaseline(GUEST_BASELINE_KEY)
 
 const dispatchChanged = (source) => {
   if (typeof window === 'undefined') return
@@ -77,7 +80,7 @@ export const adoptGuestBaselineForActiveOwner = () => {
   if (!ownerId) return null
 
   const userKey = keyForOwner(ownerId)
-  const existing = safeReadObject(userKey)
+  const existing = readSanitizedBaseline(userKey)
   if (existing) return existing
 
   const anonymous = readGuestBaseline()
@@ -92,7 +95,7 @@ export const adoptGuestBaselineForActiveOwner = () => {
 export const readBaselineProfile = () => {
   const ownerId = activeOwner()
   if (!ownerId) return readGuestBaseline()
-  return safeReadObject(keyForOwner(ownerId)) || adoptGuestBaselineForActiveOwner()
+  return readSanitizedBaseline(keyForOwner(ownerId)) || adoptGuestBaselineForActiveOwner()
 }
 
 export const saveBaselineProfile = (profile) => {
