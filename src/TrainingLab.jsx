@@ -34,6 +34,8 @@ import { clearBaselineProfile, readBaselineProfile, saveBaselineProfile } from '
 import PersonalizedPractice from './PersonalizedPractice.jsx'
 
 const BASELINE_DURATION = 60
+const BASELINE_MIN_WORDS = 20
+const BASELINE_MIN_DURATION_MS = 12_000
 
 const readHistory = () => {
   try {
@@ -75,13 +77,20 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
   useEffect(() => () => {
     activeRef.current = false
     if (timerRef.current) window.clearInterval(timerRef.current)
+    timerRef.current = null
     try { recognitionRef.current?.abort() } catch { /* already inactive */ }
+    recognitionRef.current = null
   }, [])
 
   useEffect(() => {
-    if (!baseline || activeRef.current) return
-    setResult(baseline)
-    setStatus('result')
+    if (activeRef.current) return
+    setResult(baseline || null)
+    setStatus(baseline ? 'result' : 'ready')
+    if (!baseline) {
+      setElapsed(0)
+      setTranscript('')
+      transcriptRef.current = ''
+    }
   }, [baseline])
 
   const finish = () => {
@@ -90,12 +99,24 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
     if (timerRef.current) window.clearInterval(timerRef.current)
     timerRef.current = null
     try { recognitionRef.current?.stop() } catch { /* browser already stopped */ }
+    recognitionRef.current = null
+
     const durationMs = Math.max(1000, Math.min(BASELINE_DURATION * 1000, Date.now() - startedRef.current))
-    const profile = createBaselineProfile(transcriptRef.current, durationMs)
+    const sample = transcriptRef.current.trim()
+    const wordCount = sample.split(/\s+/).filter(Boolean).length
+    setElapsed(durationMs)
+
+    if (wordCount < BASELINE_MIN_WORDS || durationMs < BASELINE_MIN_DURATION_MS) {
+      setError(`Für ein brauchbares Startprofil brauche ich mindestens ${BASELINE_MIN_WORDS} erkannte Wörter und etwa 12 Sekunden Sprache. Dein bisheriges Startprofil bleibt unverändert.`)
+      setStatus('ready')
+      return
+    }
+
+    const profile = createBaselineProfile(sample, durationMs)
     const stored = saveBaselineProfile(profile)
     setResult(stored || profile)
     setStatus('result')
-    setElapsed(durationMs)
+    setError('')
     transcriptRef.current = ''
     setTranscript('')
   }
@@ -131,6 +152,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
       activeRef.current = false
       setStatus(result ? 'result' : 'ready')
       if (timerRef.current) window.clearInterval(timerRef.current)
+      timerRef.current = null
     }
     recognition.onend = () => {
       if (!activeRef.current) return
@@ -150,6 +172,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
       }, 200)
     } catch {
       activeRef.current = false
+      recognitionRef.current = null
       setStatus(result ? 'result' : 'ready')
       setError('Die Baseline konnte nicht gestartet werden. Prüfe den Mikrofonzugriff.')
     }
@@ -162,6 +185,7 @@ function BaselineCard({ baseline, onOpenSolo, onOpenAudio }) {
     setTranscript('')
     transcriptRef.current = ''
     setElapsed(0)
+    setError('')
     setStatus('ready')
   }
   const exportBaseline = () => {
