@@ -44,6 +44,25 @@ test('baseline persistence strips raw transcript and content details', () => {
   }
 })
 
+test('legacy guest baseline is sanitized before it can be shown or exported', () => {
+  const previousStorage = global.localStorage
+  global.localStorage = createStorage({
+    'speech-coach-baseline': JSON.stringify(profile(73)),
+  })
+  try {
+    const loaded = readBaselineProfile()
+    const raw = JSON.parse(global.localStorage.getItem('speech-coach-baseline'))
+    assert.equal(loaded.overall, 73)
+    assert.equal('transcript' in loaded, false)
+    assert.equal('content' in loaded, false)
+    assert.equal('transcript' in raw, false)
+    assert.equal('content' in raw, false)
+  } finally {
+    if (previousStorage === undefined) delete global.localStorage
+    else global.localStorage = previousStorage
+  }
+})
+
 test('guest baseline is claimed immediately once an account becomes active', () => {
   const previousStorage = global.localStorage
   global.localStorage = createStorage({
