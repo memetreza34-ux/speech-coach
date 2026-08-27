@@ -25,7 +25,8 @@ const average = (values) => {
 
 const savePractice = (preset, scores, rounds, source) => {
   try {
-    const previous = JSON.parse(localStorage.getItem('speech-coach-dialog-history') || '[]')
+    const stored = JSON.parse(localStorage.getItem('speech-coach-dialog-history') || '[]')
+    const previous = Array.isArray(stored) ? stored : []
     const entry = {
       id: `${Date.now()}-personalized`,
       mode: preset.modeId === 'interview' ? 'Bewerbung personalisiert' : 'Präsentations-Q&A personalisiert',
@@ -45,7 +46,8 @@ const savePractice = (preset, scores, rounds, source) => {
 
 export default function PersonalizedPractice({ preset, onBack }) {
   const mode = useMemo(() => COACH_MODES.find((item) => item.id === preset.modeId) || COACH_MODES[0], [preset.modeId])
-  const questions = useMemo(() => (preset.questions || []).map((item) => String(item).trim()).filter(Boolean).slice(0, 5), [preset.questions])
+  const questions = useMemo(() => (preset.questions || []).map((item) => String(item).trim()).filter(Boolean).slice(0, 6), [preset.questions])
+  const totalQuestions = Math.max(1, questions.length)
   const difficulty = DIFFICULTIES[1]
   const [round, setRound] = useState(1)
   const [answer, setAnswer] = useState('')
@@ -171,7 +173,7 @@ export default function PersonalizedPractice({ preset, onBack }) {
         difficulty,
         topic: preset.title.slice(0, 220),
         round,
-        totalRounds: questions.length || 1,
+        totalRounds: totalQuestions,
         conversation,
       })
       if (!mountedRef.current) return
@@ -188,7 +190,7 @@ export default function PersonalizedPractice({ preset, onBack }) {
       setAnswer('')
       setInterimAnswer('')
 
-      if (round >= questions.length) finishPractice(nextFeedback, result.source)
+      if (round >= totalQuestions) finishPractice(nextFeedback, result.source)
       else setRound((current) => current + 1)
     } catch (requestError) {
       if (requestError?.name !== 'AbortError' && mountedRef.current) setError('Die Auswertung wurde unterbrochen. Versuche die Antwort erneut.')
@@ -243,10 +245,10 @@ export default function PersonalizedPractice({ preset, onBack }) {
         <p>Nur die lokal erzeugte Frage und deine Antwort gehen in die Coach-Auswertung. Lebenslauf, Stellenanzeige oder vollständige Präsentationsnotizen werden nicht übertragen.</p>
       </div>
 
-      <div className="practice-progress"><span style={{ width: `${((round - 1) / Math.max(1, questions.length)) * 100}%` }} /></div>
+      <div className="practice-progress"><span style={{ width: `${((round - 1) / totalQuestions) * 100}%` }} /></div>
 
       <div className="practice-question-card">
-        <div><Bot size={22} /><span>Frage {round} von {questions.length}</span></div>
+        <div><Bot size={22} /><span>Frage {round} von {totalQuestions}</span></div>
         <h3>{currentQuestion}</h3>
       </div>
 
