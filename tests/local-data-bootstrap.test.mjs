@@ -43,3 +43,7 @@ test('missing history keys are not created', () => {
   assert.deepEqual(result.repaired, [])
   for (const key of LOCAL_HISTORY_KEYS) assert.equal(storage.getItem(key), null)
 })
+
+test('explicitly unavailable storage does not block startup', () => {
+  assert.deepEqual(normalizeLocalHistoryStores(null), { repaired: [], available: false })
+})
