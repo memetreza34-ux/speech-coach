@@ -80,3 +80,20 @@ test('personalized practice uses generated questions without forwarding raw docu
   assert.doesNotMatch(practice, /preset\.(?:cv|job|notes|documents)/i)
   assert.doesNotMatch(practice, /requestCoachTurn\([^)]*(?:cv|job|notes)/is)
 })
+
+test('release cleanup keeps only AudioStudioPro and normalizes history before React startup', () => {
+  assert.equal(fs.existsSync('src/AudioStudio.jsx'), false)
+  assert.equal(fs.existsSync('src/AudioStudioPro.jsx'), true)
+  assert.equal(fs.existsSync('src/localDataBootstrap.js'), true)
+
+  const root = read('src/RootApp.jsx')
+  const main = read('src/main.jsx')
+  const bootstrap = read('src/localDataBootstrap.js')
+
+  assert.match(root, /import AudioStudio from '\.\/AudioStudioPro\.jsx'/)
+  assert.match(main, /normalizeLocalHistoryStores\(\)/)
+  assert.match(bootstrap, /speech-coach-history/)
+  assert.match(bootstrap, /speech-coach-dialog-history/)
+  assert.match(bootstrap, /speech-coach-audio-history/)
+  assert.match(bootstrap, /Array\.isArray\(parsed\)/)
+})
