@@ -4,21 +4,31 @@ const HISTORY_KEYS = [
   'speech-coach-audio-history',
 ]
 
-export const normalizeLocalHistoryStores = (storage = globalThis.localStorage) => {
-  if (!storage) return { repaired: [], available: false }
+const resolveStorage = (storage) => {
+  if (storage !== undefined) return storage
+  try {
+    return globalThis.localStorage || null
+  } catch {
+    return null
+  }
+}
+
+export const normalizeLocalHistoryStores = (storage) => {
+  const target = resolveStorage(storage)
+  if (!target) return { repaired: [], available: false }
 
   const repaired = []
   for (const key of HISTORY_KEYS) {
     try {
-      const raw = storage.getItem(key)
+      const raw = target.getItem(key)
       if (raw === null) continue
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) continue
-      storage.setItem(key, '[]')
+      target.setItem(key, '[]')
       repaired.push(key)
     } catch {
       try {
-        storage.setItem(key, '[]')
+        target.setItem(key, '[]')
         repaired.push(key)
       } catch {
         // Storage is optional; startup must continue even when it is blocked.
