@@ -11,9 +11,35 @@ const SYNC_STATE_KEY = 'speech-coach-sync-state'
 const ACTIVE_OWNER_KEY = 'speech-coach-active-local-owner'
 const USER_CACHE_PREFIX = 'speech-coach-user-cache:'
 
+const safeReadRaw = (key) => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+const safeWriteRaw = (key, value) => {
+  try {
+    localStorage.setItem(key, String(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeRemove = (key) => {
+  try {
+    localStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
 const safeReadArray = (key) => {
   try {
-    const value = JSON.parse(localStorage.getItem(key) || '[]')
+    const value = JSON.parse(safeReadRaw(key) || '[]')
     return Array.isArray(value) ? value : []
   } catch {
     return []
@@ -22,7 +48,7 @@ const safeReadArray = (key) => {
 
 const safeReadObject = (key) => {
   try {
-    const value = JSON.parse(localStorage.getItem(key) || 'null')
+    const value = JSON.parse(safeReadRaw(key) || 'null')
     return value && typeof value === 'object' ? value : null
   } catch {
     return null
@@ -31,9 +57,9 @@ const safeReadObject = (key) => {
 
 const safeWrite = (key, value) => {
   try {
-    localStorage.setItem(key, JSON.stringify(value))
+    return safeWriteRaw(key, JSON.stringify(value))
   } catch {
-    // Local storage is optional. Cloud sync can still continue.
+    return false
   }
 }
 
@@ -60,15 +86,15 @@ const stashCurrentStores = (userId) => {
 
 export const activateLocalUser = (userId) => {
   if (!userId) return
-  const activeOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
+  const activeOwner = safeReadRaw(ACTIVE_OWNER_KEY)
   if (activeOwner === userId) return
 
   if (activeOwner) {
     stashCurrentStores(activeOwner)
     // Profile and sync state are generic active-account caches. Clear them immediately
     // on A→B switches so a reload during B hydration cannot expose A's cache.
-    localStorage.removeItem(PROFILE_KEY)
-    localStorage.removeItem(SYNC_STATE_KEY)
+    safeRemove(PROFILE_KEY)
+    safeRemove(SYNC_STATE_KEY)
   }
 
   const currentStores = readCurrentStores()
@@ -81,18 +107,18 @@ export const activateLocalUser = (userId) => {
     writeCurrentStores(cachedStores || { solo: [], dialog: [], audio: [] })
   }
 
-  localStorage.setItem(ACTIVE_OWNER_KEY, userId)
+  safeWriteRaw(ACTIVE_OWNER_KEY, userId)
   window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'account-activated' } }))
 }
 
 export const deactivateLocalUser = (userId) => {
-  const activeOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
+  const activeOwner = safeReadRaw(ACTIVE_OWNER_KEY)
   if (userId && activeOwner === userId) stashCurrentStores(userId)
 
   writeCurrentStores({ solo: [], dialog: [], audio: [] })
-  localStorage.removeItem(ACTIVE_OWNER_KEY)
-  localStorage.removeItem(PROFILE_KEY)
-  localStorage.removeItem(SYNC_STATE_KEY)
+  safeRemove(ACTIVE_OWNER_KEY)
+  safeRemove(PROFILE_KEY)
+  safeRemove(SYNC_STATE_KEY)
   window.dispatchEvent(new CustomEvent('speechcoach:data-changed', { detail: { source: 'account-deactivated' } }))
 }
 
