@@ -16,10 +16,15 @@ const requiredDocs = [
   'docs/ACCESSIBILITY.md',
   'docs/API_SECURITY.md',
   'docs/PITCH_CALIBRATION.md',
+  'docs/ACCOUNT_RACE_HARDENING.md',
 ]
 
 test('A-to-Z documentation set remains complete', () => {
   for (const path of requiredDocs) assert.equal(fs.existsSync(path), true, `${path} is missing`)
+
+  const index = read('docs/INDEX.md')
+  assert.match(index, /ACCOUNT_RACE_HARDENING\.md/)
+  assert.match(index, /Account-Race-Matrix/)
 
   const master = read('docs/MASTER_ROADMAP.md')
   assert.match(master, /Feature-Freeze/)
@@ -37,6 +42,12 @@ test('A-to-Z documentation set remains complete', () => {
   const operations = read('docs/OPERATIONS_RELEASE.md')
   assert.match(operations, /Training-Lab-E2E/)
   assert.match(operations, /CSP\/Supply Chain/)
+
+  const accountRace = read('docs/ACCOUNT_RACE_HARDENING.md')
+  assert.match(accountRace, /STALE_ACCOUNT_CONTEXT/)
+  assert.match(accountRace, /Wechsel während Sync/)
+  assert.match(accountRace, /Wechsel während Export/)
+  assert.match(accountRace, /Wechsel während Account-Löschung/)
 })
 
 test('Training Lab remains wired into RootApp and progress fallback', () => {
@@ -96,4 +107,21 @@ test('release cleanup keeps only AudioStudioPro and normalizes history before Re
   assert.match(bootstrap, /speech-coach-dialog-history/)
   assert.match(bootstrap, /speech-coach-audio-history/)
   assert.match(bootstrap, /Array\.isArray\(parsed\)/)
+})
+
+test('account race protection remains part of code and regression suite', () => {
+  for (const path of [
+    'src/cloud/accountRaceGuard.js',
+    'tests/account-race-guard.test.mjs',
+    'tests/cloud-account-race.test.mjs',
+    'tests/auth-context-race.test.mjs',
+  ]) assert.equal(fs.existsSync(path), true, `${path} is missing`)
+
+  const auth = read('src/cloud/AuthContext.jsx')
+  const cloud = read('src/cloud/cloudSync.js')
+  assert.match(auth, /hydrateGenerationRef/)
+  assert.match(auth, /visibleProfile/)
+  assert.match(auth, /createStaleAccountError/)
+  assert.match(cloud, /assertActiveLocalOwner/)
+  assert.match(cloud, /isActiveLocalOwner/)
 })
