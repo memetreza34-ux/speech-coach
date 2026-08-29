@@ -17,6 +17,7 @@ Diese Datei ist der Einstiegspunkt für die vollständige A-bis-Z-Anleitung.
 ## Sicherheit und Betrieb
 
 - `API_SECURITY.md` — API-Schutz, Origin-Prüfung, Limits, Request-IDs
+- `ACCOUNT_RACE_HARDENING.md` — Kontowechsel während Hydration, Sync, Export und Löschung sicher testen
 - `OPERATIONS_RELEASE.md` — Kosten, Monitoring, Browser-E2E, CSP/Supply Chain
 - `DEPLOYMENT.md` — Vercel/Supabase/OpenAI Deployment und Remote-Smoke
 
@@ -29,7 +30,7 @@ Diese Datei ist der Einstiegspunkt für die vollständige A-bis-Z-Anleitung.
 1. P0-Funktionen stabilisieren.
 2. `npm run check` real grün bekommen.
 3. Preview deployen.
-4. Browser-/Geräte-E2E.
+4. Browser-/Geräte-E2E inklusive Account-Race-Matrix durchführen.
 5. AI-Evaluation.
 6. Audio-/Pitch-Kalibrierung.
 7. Legal-/Data-Gate.
