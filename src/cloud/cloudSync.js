@@ -1,3 +1,5 @@
+import { assertActiveLocalOwner, isActiveLocalOwner } from './accountRaceGuard.js'
+
 const LOCAL_STORES = {
   solo: 'speech-coach-history',
   dialog: 'speech-coach-dialog-history',
@@ -196,7 +198,7 @@ export const loadOrCreateProfile = async (client, user) => {
   if (error) throw error
   if (data) {
     const profile = normalizeProfile(data, user)
-    saveLocalProfile(profile)
+    if (isActiveLocalOwner(user.id)) saveLocalProfile(profile)
     return profile
   }
 
@@ -217,7 +219,7 @@ export const loadOrCreateProfile = async (client, user) => {
 
   if (createError) throw createError
   const profile = normalizeProfile(created, user)
-  saveLocalProfile(profile)
+  if (isActiveLocalOwner(user.id)) saveLocalProfile(profile)
   return profile
 }
 
@@ -239,12 +241,14 @@ export const updateCloudProfile = async (client, user, profile) => {
 
   if (error) throw error
   const normalized = normalizeProfile(data, user)
-  saveLocalProfile(normalized)
+  if (isActiveLocalOwner(user.id)) saveLocalProfile(normalized)
   return normalized
 }
 
 export const syncTrainingData = async (client, user, profile) => {
   if (!client || !user) throw new Error('Keine aktive Cloud-Sitzung.')
+  assertActiveLocalOwner(user.id)
+
   if (profile?.syncEnabled === false) {
     const state = { status: 'disabled', lastSyncAt: null, uploaded: 0, downloaded: 0 }
     saveSyncState(state)
@@ -265,6 +269,7 @@ export const syncTrainingData = async (client, user, profile) => {
       })
 
     if (uploadError) throw uploadError
+    assertActiveLocalOwner(user.id)
   }
 
   const { data: cloudRows, error: downloadError } = await client
@@ -275,6 +280,7 @@ export const syncTrainingData = async (client, user, profile) => {
     .limit(500)
 
   if (downloadError) throw downloadError
+  assertActiveLocalOwner(user.id)
 
   const rowsByType = { solo: [], dialog: [], audio: [] }
   ;(cloudRows || []).forEach((row) => {
