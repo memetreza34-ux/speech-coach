@@ -18,6 +18,7 @@ Diese Datei ist der Einstiegspunkt für die vollständige A-bis-Z-Anleitung.
 
 - `API_SECURITY.md` — API-Schutz, Origin-Prüfung, Limits, Request-IDs
 - `ACCOUNT_RACE_HARDENING.md` — Kontowechsel während Hydration, Sync, Export und Löschung sicher testen
+- `SUPPLY_CHAIN.md` — Runtime-Abhängigkeiten, CSP, Lockfile und immutable GitHub-Action-Pins
 - `OPERATIONS_RELEASE.md` — Kosten, Monitoring, Browser-E2E, CSP/Supply Chain
 - `DEPLOYMENT.md` — Vercel/Supabase/OpenAI Deployment und Remote-Smoke
 
@@ -34,7 +35,7 @@ Diese Datei ist der Einstiegspunkt für die vollständige A-bis-Z-Anleitung.
 5. AI-Evaluation.
 6. Audio-/Pitch-Kalibrierung.
 7. Legal-/Data-Gate.
-8. Kosten-/Monitoring-/WAF-Gate.
+8. Supply-Chain-/Kosten-/Monitoring-/WAF-Gate.
 9. Production deployen.
 10. finalen Remote-Smoke durchführen.
 11. erst dann Draft-PR freigeben/mergen.
