@@ -63,7 +63,13 @@ export const activateLocalUser = (userId) => {
   const activeOwner = localStorage.getItem(ACTIVE_OWNER_KEY)
   if (activeOwner === userId) return
 
-  if (activeOwner) stashCurrentStores(activeOwner)
+  if (activeOwner) {
+    stashCurrentStores(activeOwner)
+    // Profile and sync state are generic active-account caches. Clear them immediately
+    // on A→B switches so a reload during B hydration cannot expose A's cache.
+    localStorage.removeItem(PROFILE_KEY)
+    localStorage.removeItem(SYNC_STATE_KEY)
+  }
 
   const currentStores = readCurrentStores()
   const cachedStores = safeReadObject(cacheKeyForUser(userId))
