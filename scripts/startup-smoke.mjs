@@ -38,7 +38,7 @@ if (fs.existsSync(bootstrapPath) && fs.existsSync(mainPath)) {
   }
 
   expect(bootstrap.includes('Array.isArray(parsed)'), 'bootstrap must preserve only array-shaped histories')
-  expect(bootstrap.includes("storage.setItem(key, '[]')"), 'bootstrap must repair invalid histories to an empty array')
+  expect(bootstrap.includes("target.setItem(key, '[]')"), 'bootstrap must repair invalid histories to an empty array')
 
   const syntax = spawnSync(process.execPath, ['--check', bootstrapPath], { encoding: 'utf8' })
   expect(syntax.status === 0, `localDataBootstrap syntax check failed: ${syntax.stderr.trim()}`)
