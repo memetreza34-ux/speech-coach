@@ -17,6 +17,7 @@ const requiredDocs = [
   'docs/API_SECURITY.md',
   'docs/PITCH_CALIBRATION.md',
   'docs/ACCOUNT_RACE_HARDENING.md',
+  'docs/SUPPLY_CHAIN.md',
 ]
 
 test('A-to-Z documentation set remains complete', () => {
@@ -24,7 +25,9 @@ test('A-to-Z documentation set remains complete', () => {
 
   const index = read('docs/INDEX.md')
   assert.match(index, /ACCOUNT_RACE_HARDENING\.md/)
+  assert.match(index, /SUPPLY_CHAIN\.md/)
   assert.match(index, /Account-Race-Matrix/)
+  assert.match(index, /Supply-Chain/)
 
   const master = read('docs/MASTER_ROADMAP.md')
   assert.match(master, /Feature-Freeze/)
@@ -48,6 +51,12 @@ test('A-to-Z documentation set remains complete', () => {
   assert.match(accountRace, /Wechsel während Sync/)
   assert.match(accountRace, /Wechsel während Export/)
   assert.match(accountRace, /Wechsel während Account-Löschung/)
+
+  const supplyChain = read('docs/SUPPLY_CHAIN.md')
+  assert.match(supplyChain, /@supabase\/supabase-js@2\.111\.0/)
+  assert.match(supplyChain, /actions\/checkout/)
+  assert.match(supplyChain, /actions\/setup-node/)
+  assert.match(supplyChain, /immutable/)
 
   const production = read('docs/PRODUCTION_CHECKLIST.md')
   assert.match(production, /docs\/ACCOUNT_RACE_HARDENING\.md/)
