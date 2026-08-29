@@ -2,7 +2,7 @@
 
 Diese Checkliste ist die verbindliche Freigabebedingung vor einem Merge nach `main` und vor einem öffentlichen Produktionsrelease.
 
-Übergeordnete Anleitung: `docs/MASTER_ROADMAP.md`. Ergänzend gelten `docs/PRODUCT_SPEC.md`, `docs/AI_EVALUATION.md`, `docs/LEGAL_DATA_RELEASE.md`, `docs/OPERATIONS_RELEASE.md`, `docs/ACCESSIBILITY.md`, `docs/API_SECURITY.md` und `docs/PITCH_CALIBRATION.md`.
+Übergeordnete Anleitung: `docs/MASTER_ROADMAP.md`. Ergänzend gelten `docs/PRODUCT_SPEC.md`, `docs/AI_EVALUATION.md`, `docs/LEGAL_DATA_RELEASE.md`, `docs/OPERATIONS_RELEASE.md`, `docs/ACCESSIBILITY.md`, `docs/API_SECURITY.md`, `docs/PITCH_CALIBRATION.md` und `docs/ACCOUNT_RACE_HARDENING.md`.
 
 ## 1. Automatische Validierung
 
@@ -295,7 +295,7 @@ Mit zwei Konten und Gastmodus prüfen:
 - sechs Fragen erzeugen
 - gemeinsame/fehlende Schlüsselbegriffe plausibel
 - Button „Personalisierte Probe starten“ öffnet personalisierte Probe
-- bis zu fünf vorbereitete Fragen werden nacheinander gestellt
+- alle sechs vorbereiteten Bewerbungsfragen werden nacheinander gestellt
 - Textantwort funktioniert
 - Spracheingabe funktioniert oder zeigt kontrollierten Unsupported-State
 - TTS an/aus funktioniert
@@ -374,6 +374,21 @@ Mit zwei Browserprofilen oder zwei Geräten prüfen:
 - Audiodateien werden niemals synchronisiert
 - Baseline wird in v1 nicht automatisch als Cloud-Session synchronisiert
 - Training-Lab-CV/Stellenanzeige/Präsentationsnotizen werden nicht automatisch synchronisiert
+
+### Account-/Cloud-Race-Matrix
+
+Die vollständige Matrix aus `docs/ACCOUNT_RACE_HARDENING.md` mit zwei Wegwerf-Konten durchführen.
+
+Mindestens prüfen:
+
+- A→B-Wechsel während Profil-Hydration zeigt nie As Profil als Bs Profil
+- A→B-Wechsel während laufendem Sync schreibt keine A-Session in Bs sichtbare History
+- alter A-Sync überschreibt Bs Sync-State nicht
+- direkter A→B-Wechsel entfernt As generischen Profil-/Sync-Cache, cached aber As Training korrekt
+- Export von A während Wechsel auf B erzeugt keinen A-Cloud/B-Local-Mischexport
+- „lokale Daten löschen“ von A während Wechsel auf B löscht Bs Daten nicht
+- Account-Löschung von A während Wechsel auf B meldet B nicht ab und löscht Bs History/Baseline/Plan/Profile nicht
+- erwarteter `STALE_ACCOUNT_CONTEXT` wird als kontrollierter Abort behandelt, nicht als normaler Serverfehler
 
 ## 11. Datenschutz, Export und Löschung
 
@@ -482,8 +497,9 @@ Der PR darf erst aus Draft genommen beziehungsweise gemergt werden, wenn:
 14. Kosten-/Monitoring-/Browser-Gate aus `docs/OPERATIONS_RELEASE.md` abgeschlossen ist.
 15. Keyboard-, Screenreader- und Reduced-Motion-Prüfung aus `docs/ACCESSIBILITY.md` durchgeführt ist.
 16. globale WAF-/Distributed-Rate-Limits aktiv und getestet sind.
-17. Abbruch-/Race-Condition-Tests auf echter Browser-Hardware erfolgreich sind.
-18. reale Pitch-Kalibrierung mit mehreren Stimmen/Mikrofonen durchgeführt und dokumentiert ist.
-19. nach Production-Deployment der Remote-Smoke gegen finale URL erfolgreich ist.
+17. Account-/Cloud-Race-Matrix aus `docs/ACCOUNT_RACE_HARDENING.md` mit zwei Konten real bestanden ist.
+18. allgemeine Abbruch-/Race-Condition-Tests auf echter Browser-Hardware erfolgreich sind.
+19. reale Pitch-Kalibrierung mit mehreren Stimmen/Mikrofonen durchgeführt und dokumentiert ist.
+20. nach Production-Deployment der Remote-Smoke gegen finale URL erfolgreich ist.
 
-Vor Erfüllung aller 19 Punkte bleibt der PR Draft.
+Vor Erfüllung aller 20 Punkte bleibt der PR Draft.
