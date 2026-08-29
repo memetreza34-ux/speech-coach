@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { loadOrCreateProfile, syncTrainingData } from '../src/cloud/cloudSync.js'
+import { activateLocalUser, loadOrCreateProfile, syncTrainingData } from '../src/cloud/cloudSync.js'
 
 const createStorage = (initial = {}) => {
   const values = new Map(Object.entries(initial))
@@ -30,6 +30,33 @@ const installBrowserMocks = (storage) => {
     else global.CustomEvent = previousCustomEvent
   }
 }
+
+test('direct account switch clears generic profile and sync caches while preserving per-user training', () => {
+  const aHistory = [{ id: 'a-local', createdAt: '2026-08-28T10:00:00.000Z' }]
+  const bHistory = [{ id: 'b-local', createdAt: '2026-08-29T10:00:00.000Z' }]
+  const storage = createStorage({
+    'speech-coach-active-local-owner': 'user-a',
+    'speech-coach-history': JSON.stringify(aHistory),
+    'speech-coach-dialog-history': '[]',
+    'speech-coach-audio-history': '[]',
+    'speech-coach-user-cache:user-b': JSON.stringify({ solo: bHistory, dialog: [], audio: [] }),
+    'speech-coach-account-profile': JSON.stringify({ userId: 'user-a', displayName: 'A' }),
+    'speech-coach-sync-state': JSON.stringify({ status: 'synced', owner: 'user-a' }),
+  })
+  const restore = installBrowserMocks(storage)
+
+  try {
+    activateLocalUser('user-b')
+
+    assert.equal(storage.getItem('speech-coach-active-local-owner'), 'user-b')
+    assert.equal(storage.getItem('speech-coach-account-profile'), null)
+    assert.equal(storage.getItem('speech-coach-sync-state'), null)
+    assert.deepEqual(JSON.parse(storage.getItem('speech-coach-history')), bHistory)
+    assert.deepEqual(JSON.parse(storage.getItem('speech-coach-user-cache:user-a')).solo, aHistory)
+  } finally {
+    restore()
+  }
+})
 
 test('stale cloud download cannot overwrite a newly active account', async () => {
   const storage = createStorage({
