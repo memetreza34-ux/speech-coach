@@ -63,23 +63,32 @@ Bei einem Action-Update:
 Vor Release:
 
 - `package-lock.json` muss vorhanden sein.
+- `lockfileVersion` bleibt auf dem vom aktuellen npm erzeugten unterstützten Format; aktuell Version 3.
+- Root-`dependencies` und `devDependencies` im Lockfile müssen exakt zum `package.json` passen.
 - `npm ci` muss ohne Lockfile-Neuschreiben funktionieren.
 - keine absichtlichen uncommitteten Lockfile-Änderungen.
+- keine Dependency-Specs `latest` oder `*`.
+- keine direkten `http:`, `https:`, `git:`, `git+`, `github:`, `file:` oder `link:` Specs im Manifest.
 - neue Runtime-Abhängigkeiten nur mit klarer Produktnotwendigkeit.
 - keine Secrets oder privaten Registry-Tokens in Repo-Dateien.
 - Dependency-Updates dürfen nicht nur wegen einer Versionsnummer erfolgen; Auth, Audio, Build und Browser-Flows müssen danach erneut geprüft werden.
 
 ## 5. Automatische Gates
 
-`tests/supply-chain.test.mjs` schützt zwei erlaubte Supabase-Zustände:
+`tests/supply-chain.test.mjs` schützt:
 
-### Übergangszustand
+- Root-Konsistenz zwischen `package.json` und `package-lock.json`,
+- keine floating/external npm-Specs,
+- zwei erlaubte Supabase-Zustände,
+- immutable GitHub-Action-Pins.
+
+### Supabase-Übergangszustand
 
 - keine Supabase-npm-Dependency,
 - exakt gepinnter jsDelivr-Pfad `2.111.0`,
 - passender jsDelivr-CSP-Host.
 
-### Zielzustand
+### Supabase-Zielzustand
 
 - exakt gepinnte npm-Dependency `2.111.0`,
 - normaler `@supabase/supabase-js`-Import,
@@ -95,6 +104,7 @@ Supply Chain gilt erst als bestanden, wenn:
 - `npm ci` real erfolgreich ausgeführt wurde,
 - `npm run check` real erfolgreich ausgeführt wurde,
 - Supply-Chain-Tests grün sind,
+- `package.json` und Lockfile konsistent sind,
 - GitHub Actions auf verifizierte Commit-SHAs gepinnt sind,
 - CSP dem tatsächlich genutzten Runtime-Modell entspricht,
 - keine ungeplanten externen Runtime-Script-Hosts vorhanden sind,
