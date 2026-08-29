@@ -48,6 +48,12 @@ test('A-to-Z documentation set remains complete', () => {
   assert.match(accountRace, /Wechsel während Sync/)
   assert.match(accountRace, /Wechsel während Export/)
   assert.match(accountRace, /Wechsel während Account-Löschung/)
+
+  const production = read('docs/PRODUCTION_CHECKLIST.md')
+  assert.match(production, /docs\/ACCOUNT_RACE_HARDENING\.md/)
+  assert.match(production, /alle sechs vorbereiteten Bewerbungsfragen/)
+  assert.match(production, /Account-\/Cloud-Race-Matrix/)
+  assert.match(production, /Vor Erfüllung aller 20 Punkte bleibt der PR Draft/)
 })
 
 test('Training Lab remains wired into RootApp and progress fallback', () => {
@@ -124,4 +130,6 @@ test('account race protection remains part of code and regression suite', () => 
   assert.match(auth, /createStaleAccountError/)
   assert.match(cloud, /assertActiveLocalOwner/)
   assert.match(cloud, /isActiveLocalOwner/)
+  assert.match(cloud, /localStorage\.removeItem\(PROFILE_KEY\)/)
+  assert.match(cloud, /localStorage\.removeItem\(SYNC_STATE_KEY\)/)
 })
