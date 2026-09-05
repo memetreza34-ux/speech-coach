@@ -1,50 +1,68 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Briefcase, Play, Square, ChevronLeft, Activity, Gauge, MessageSquare, Zap, Home, Target, User, ArrowRight, CheckCircle2, Heart, Globe, DollarSign, Key, Loader2 } from 'lucide-react'
-import './App.css'
+import { Mic, Briefcase, Play, Square, ChevronLeft, Activity, Gauge, MessageSquare, Home, Target, User, ArrowRight, CheckCircle2, Heart, Globe, DollarSign, Loader2, FlaskConical } from 'lucide-react'
+
+// --- Utility: Pacing ---
+const getPacingStatus = (wpm) => {
+  if (wpm < 110) return "Zu langsam";
+  if (wpm > 160) return "Zu schnell";
+  return "Perfekt";
+};
+
+const countWords = (transcript) => (transcript.trim().match(/\S+/g) || []).length;
+
+const dummyAnalysis = (transcript, wpm, aiTip) => ({
+  fillers: (transcript.match(/ähm|also|sozusagen|quasi|halt|genau/gi) || []).length,
+  wpm,
+  pacingStatus: getPacingStatus(wpm),
+  aiTip,
+  isDummy: true
+});
 
 // --- Utility: AI Analysis ---
-const analyzeTranscript = async (transcript, mode, profile, apiKey) => {
-  if (!apiKey) {
-    // Fallback Fake-AI if no key provided
-    return new Promise(resolve => setTimeout(() => {
-      resolve({
-        fillers: (transcript.match(/ähm|also|sozusagen|quasi|halt|genau/gi) || []).length,
-        wpm: 120,
-        pacingStatus: "Gut",
-        aiTip: "Du hast noch keinen API-Key hinterlegt. Das ist eine Dummy-Analyse. Füge deinen Gemini API-Key im Profil hinzu, um echte Magie zu erleben!"
-      });
-    }, 1500));
-  }
-
-  const prompt = `Du bist ein professioneller Kommunikationstrainer. Analysiere das folgende Transkript eines Nutzers. 
-Nutzer-Profil: Name: ${profile.name}, Rolle: ${profile.role}, Alter: ${profile.age}, Hobbys: ${profile.hobbies}.
-Szenario-Modus: ${mode}.
-Transkript: "${transcript}"
-
-Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgenden Schlüsseln zurück:
-"fillers" (Anzahl der Füllwörter als Zahl),
-"wpm" (Geschätzte Wörter pro Minute als Zahl, nimm an die Aufnahme dauerte 60 Sekunden),
-"pacingStatus" (Ein kurzes Wort zum Tempo: "Zu langsam", "Perfekt", oder "Zu schnell"),
-"aiTip" (Ein 2-Satz Tipp, spezifisch auf den Inhalt des Transkripts, das Szenario und die Hobbys/Rolle des Nutzers bezogen).`;
+// Der Gemini-Call läuft server-seitig über /api/analyze (Vercel Function) —
+// der Key bleibt dort in einer Env-Var und geht nie durch den Client.
+const analyzeTranscript = async (transcript, mode, profile, durationMs) => {
+  const minutes = Math.max(durationMs / 60000, 1 / 60);
+  const wordCount = countWords(transcript);
+  const measuredWpm = Math.round(wordCount / minutes);
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
+      body: JSON.stringify({ transcript, mode, profile, durationMs })
     });
-    const data = await response.json();
-    const resultText = data.candidates[0].content.parts[0].text;
-    return JSON.parse(resultText);
+
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => null);
+      console.error("Analyse-Server Fehler:", response.status, errBody);
+      const tip = response.status === 404
+        ? "Kein Analyse-Server erreichbar (lokale Vorschau ohne 'vercel dev'?). Das ist eine Dummy-Analyse."
+        : (errBody?.error || "Die KI-Analyse ist fehlgeschlagen. Das ist eine Dummy-Analyse.");
+      return dummyAnalysis(transcript, measuredWpm, tip);
+    }
+
+    return await response.json();
   } catch (e) {
     console.error("AI Error:", e);
-    return { fillers: 0, wpm: 0, pacingStatus: "Fehler", aiTip: "Fehler bei der KI-Analyse. Bitte überprüfe deinen API-Key." };
+    return dummyAnalysis(transcript, measuredWpm, "Der Analyse-Server ist nicht erreichbar. Das ist eine Dummy-Analyse.");
   }
 };
+
+// --- Utility: Progress ---
+const computeStreak = (history) => {
+  const daySet = new Set(history.map(h => new Date(h.date).toDateString()));
+  const cursor = new Date();
+  let streak = 0;
+  while (daySet.has(cursor.toDateString())) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+};
+
+const computeLevel = (history) => Math.min(99, Math.floor(history.length / 3) + 1);
 
 // --- Animations ---
 const pageVariants = {
@@ -117,7 +135,7 @@ const OnboardingFlow = ({ onComplete }) => {
 // ==========================================
 // 2. DASHBOARD SCREEN
 // ==========================================
-const DashboardScreen = ({ profile }) => (
+const DashboardScreen = ({ profile, sessionHistory }) => (
   <motion.div className="app-container app-content" variants={pageVariants} initial="initial" animate="animate" exit="exit">
     <div style={{ marginBottom: '2rem' }}>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Hallo, <span className="gradient-text">{profile.name || 'Speaker'}</span>! 👋</h1>
@@ -126,25 +144,39 @@ const DashboardScreen = ({ profile }) => (
 
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
       <div className="glass-panel" style={{ padding: '1rem', textAlign: 'center' }}>
-        <h3 style={{ color: 'var(--accent-purple)', fontSize: '2rem', marginBottom: '0.2rem' }}>Lvl 4</h3>
+        <h3 style={{ color: 'var(--accent-purple)', fontSize: '2rem', marginBottom: '0.2rem' }}>Lvl {computeLevel(sessionHistory)}</h3>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Charisma</p>
       </div>
       <div className="glass-panel" style={{ padding: '1rem', textAlign: 'center' }}>
-        <h3 style={{ color: 'var(--accent-blue)', fontSize: '2rem', marginBottom: '0.2rem' }}>3</h3>
+        <h3 style={{ color: 'var(--accent-blue)', fontSize: '2rem', marginBottom: '0.2rem' }}>{computeStreak(sessionHistory)}</h3>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Day Streak</p>
       </div>
     </div>
+
+    {sessionHistory.length > 0 && (
+      <div className="glass-panel">
+        <h3 style={{ marginBottom: '1rem' }}>Letzte Sessions</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {[...sessionHistory].reverse().slice(0, 5).map((s, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              <span style={{ textTransform: 'capitalize' }}>{s.mode}</span>
+              <span>{s.wpm} WPM &middot; {s.fillers} Füllwörter</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
   </motion.div>
 );
 
 // ==========================================
 // 3. PROFILE SCREEN
 // ==========================================
-const ProfileScreen = ({ profile, apiKey, setApiKey }) => (
+const ProfileScreen = ({ profile }) => (
   <motion.div className="app-container app-content" variants={pageVariants} initial="initial" animate="animate" exit="exit">
     <h2 style={{ fontSize: '2rem', marginBottom: '2rem' }}>Dein <span className="gradient-text">Profil</span></h2>
-    
-    <div className="glass-panel" style={{ marginBottom: '1.5rem' }}>
+
+    <div className="glass-panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
         <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <User size={30} color="var(--accent-purple)" />
@@ -154,23 +186,6 @@ const ProfileScreen = ({ profile, apiKey, setApiKey }) => (
           <p style={{ color: 'var(--text-secondary)' }}>{profile.role || 'Unbekannte Rolle'}</p>
         </div>
       </div>
-    </div>
-
-    <div className="glass-panel" style={{ border: apiKey ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)' }}>
-      <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Key size={18} color={apiKey ? "var(--accent-blue)" : "#ef4444"} /> Gemini API Key
-      </h3>
-      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-        Ohne API-Key nutzt die App eine Dummy-Analyse. Füge deinen Key ein, um die echte KI zu aktivieren (wird nur lokal gespeichert).
-      </p>
-      <input 
-        type="password" 
-        className="input-field" 
-        placeholder="AIzaSy..." 
-        value={apiKey}
-        onChange={e => setApiKey(e.target.value)}
-        style={{ marginBottom: 0 }}
-      />
     </div>
   </motion.div>
 );
@@ -297,7 +312,13 @@ const RecorderScreen = ({ mode, onFinish, onCancel }) => {
 const FeedbackScreen = ({ analysis, onDone }) => {
   return (
     <motion.div className="app-container" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: 'var(--bg-color)', overflowY: 'auto' }} variants={pageVariants} initial="initial" animate="animate" exit="exit">
-      <h2 style={{ fontSize: '2.2rem', marginBottom: '2rem', textAlign: 'center', marginTop: '2rem' }}>KI <span className="gradient-text">Feedback</span></h2>
+      <h2 style={{ fontSize: '2.2rem', marginBottom: analysis.isDummy ? '0.75rem' : '2rem', textAlign: 'center', marginTop: '2rem' }}>KI <span className="gradient-text">Feedback</span></h2>
+
+      {analysis.isDummy && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '1.5rem', color: '#f59e0b', fontSize: '0.8rem', fontWeight: '600' }}>
+          <FlaskConical size={16} /> Demo-Modus &mdash; keine echte KI-Analyse
+        </div>
+      )}
 
       <motion.div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }} variants={staggerContainer} initial="initial" animate="animate">
         <motion.div variants={staggerItem} className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
@@ -341,15 +362,16 @@ const LoadingScreen = () => (
   </motion.div>
 );
 
-const TrainingFlow = ({ profile, apiKey }) => {
+const TrainingFlow = ({ profile, onSessionComplete }) => {
   const [subScreen, setSubScreen] = useState('selector'); // selector, recorder, loading, feedback
   const [mode, setMode] = useState('impromptu');
   const [analysisData, setAnalysisData] = useState(null);
 
   const handleFinishRecording = async (transcript, timeMs) => {
     setSubScreen('loading');
-    const result = await analyzeTranscript(transcript, mode, profile, apiKey);
+    const result = await analyzeTranscript(transcript, mode, profile, timeMs);
     setAnalysisData(result);
+    onSessionComplete({ mode, date: new Date().toISOString(), fillers: result.fillers, wpm: result.wpm, pacingStatus: result.pacingStatus });
     setSubScreen('feedback');
   };
 
@@ -366,15 +388,15 @@ const TrainingFlow = ({ profile, apiKey }) => {
 // ==========================================
 // 5. MAIN APP & ROOT
 // ==========================================
-const MainApp = ({ profile, apiKey, setApiKey }) => {
+const MainApp = ({ profile, sessionHistory, onSessionComplete }) => {
   const [activeTab, setActiveTab] = useState('training');
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <AnimatePresence mode="wait">
-        {activeTab === 'dashboard' && <DashboardScreen key="dashboard" profile={profile} />}
-        {activeTab === 'training' && <TrainingFlow key="training" profile={profile} apiKey={apiKey} />}
-        {activeTab === 'profile' && <ProfileScreen key="profile" profile={profile} apiKey={apiKey} setApiKey={setApiKey} />}
+        {activeTab === 'dashboard' && <DashboardScreen key="dashboard" profile={profile} sessionHistory={sessionHistory} />}
+        {activeTab === 'training' && <TrainingFlow key="training" profile={profile} onSessionComplete={onSessionComplete} />}
+        {activeTab === 'profile' && <ProfileScreen key="profile" profile={profile} />}
       </AnimatePresence>
 
       <div className="bottom-nav">
@@ -386,23 +408,39 @@ const MainApp = ({ profile, apiKey, setApiKey }) => {
   );
 };
 
-function App() {
-  const [hasOnboarded, setHasOnboarded] = useState(false);
-  const [userProfile, setUserProfile] = useState(null);
-  
-  // Persist API Key in localStorage
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  useEffect(() => { localStorage.setItem('gemini_api_key', apiKey); }, [apiKey]);
+const readJSON = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
 
-  const finishOnboarding = (profileData) => {
-    setUserProfile(profileData);
-    setHasOnboarded(true);
-  };
+function App() {
+  // Persist Profil in localStorage, damit ein Reload nicht zurück ins Onboarding schickt
+  const [userProfile, setUserProfile] = useState(() => readJSON('speech_coach_profile', null));
+  useEffect(() => {
+    if (userProfile) localStorage.setItem('speech_coach_profile', JSON.stringify(userProfile));
+  }, [userProfile]);
+
+  // Persist Trainingshistorie für echte Dashboard-Werte (Level/Streak)
+  const [sessionHistory, setSessionHistory] = useState(() => readJSON('speech_coach_history', []));
+  useEffect(() => {
+    localStorage.setItem('speech_coach_history', JSON.stringify(sessionHistory));
+  }, [sessionHistory]);
+  const addSession = (session) => setSessionHistory(prev => [...prev, session]);
+
+  // Aufräumen: der Gemini-Key lief früher unsicher über den Client (localStorage + URL-Param).
+  // Die Analyse läuft jetzt server-seitig über /api/analyze — ein evtl. noch vorhandener alter Key wird entfernt.
+  useEffect(() => { localStorage.removeItem('gemini_api_key'); }, []);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--bg-color)' }}>
       <AnimatePresence mode="wait">
-        {!hasOnboarded ? <OnboardingFlow key="onboarding" onComplete={finishOnboarding} /> : <MainApp key="main" profile={userProfile} apiKey={apiKey} setApiKey={setApiKey} />}
+        {!userProfile
+          ? <OnboardingFlow key="onboarding" onComplete={setUserProfile} />
+          : <MainApp key="main" profile={userProfile} sessionHistory={sessionHistory} onSessionComplete={addSession} />}
       </AnimatePresence>
     </div>
   );

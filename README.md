@@ -1,3 +1,16 @@
+# Speech Coach
+
+React + Vite App für Sprechtraining mit KI-Feedback.
+
+## KI-Analyse (Gemini)
+
+Der Gemini-Call läuft server-seitig über die Vercel Function [`api/analyze.js`](api/analyze.js) — der API-Key wird nie an den Client ausgeliefert.
+
+- **Lokal:** `.env.example` nach `.env.local` kopieren, `GEMINI_API_KEY` eintragen, dann mit `vercel dev` starten (statt `npm run dev`), damit die `/api`-Route mitläuft. Ohne laufende Function fällt die App automatisch auf eine Dummy-Analyse zurück.
+- **Deploy auf Vercel:** `GEMINI_API_KEY` als Environment Variable im Projekt-Dashboard setzen.
+
+---
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
