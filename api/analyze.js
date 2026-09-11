@@ -4,12 +4,6 @@
 
 const MAX_TRANSCRIPT_LENGTH = 4000;
 
-const getPacingStatus = (wpm) => {
-  if (wpm < 110) return 'Zu langsam';
-  if (wpm > 160) return 'Zu schnell';
-  return 'Perfekt';
-};
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -22,7 +16,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { transcript, mode, profile, durationMs } = req.body || {};
+  const { transcript, mode, profile, metrics } = req.body || {};
   if (typeof transcript !== 'string' || !transcript.trim()) {
     res.status(400).json({ error: 'Transkript fehlt oder ist leer.' });
     return;
@@ -30,22 +24,23 @@ export default async function handler(req, res) {
 
   const safeTranscript = transcript.slice(0, MAX_TRANSCRIPT_LENGTH);
   const safeProfile = profile && typeof profile === 'object' ? profile : {};
-  const safeDurationMs = Number(durationMs) > 0 ? Number(durationMs) : 60000;
-  const wordCount = (safeTranscript.trim().match(/\S+/g) || []).length;
-  const minutes = Math.max(safeDurationMs / 60000, 1 / 60);
-  const measuredWpm = Math.round(wordCount / minutes);
+  const m = metrics && typeof metrics === 'object' ? metrics : {};
 
-  const prompt = `Du bist ein professioneller Kommunikationstrainer. Analysiere das folgende Transkript eines Nutzers.
+  const prompt = `Du bist ein professioneller Kommunikationstrainer. Analysiere den folgenden Sprech-Versuch eines Nutzers.
 Nutzer-Profil: Name: ${safeProfile.name || ''}, Rolle: ${safeProfile.role || ''}, Alter: ${safeProfile.age || ''}, Hobbys: ${safeProfile.hobbies || ''}.
 Szenario-Modus: ${mode || 'impromptu'}.
-Die Aufnahme dauerte ca. ${Math.round(safeDurationMs / 1000)} Sekunden und enthält ${wordCount} Wörter.
+
+Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst sie nicht berechnen):
+- Sprechtempo: ${m.wpm ?? '?'} Wörter/Minute (${m.pacingStatus ?? '?'})
+- Sprechpausen über 0,6s: ${m.pauseCount ?? '?'} (längste: ${m.longestPauseMs ? (m.longestPauseMs / 1000).toFixed(1) + 's' : '?'})
+- Redeanteil: ${m.speakingRatio ?? '?'}% der Aufnahmezeit
+- Stimmdynamik: ${m.dynamics ?? '?'} (unter 35 = monoton, über 75 = sehr bewegt)
+
 Transkript: "${safeTranscript}"
 
 Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgenden Schlüsseln zurück:
-"fillers" (Anzahl der Füllwörter als Zahl),
-"wpm" (Wörter pro Minute als Zahl, berechnet aus Wortanzahl und Aufnahmedauer),
-"pacingStatus" (Ein kurzes Wort zum Tempo: "Zu langsam", "Perfekt", oder "Zu schnell"),
-"aiTip" (Ein 2-Satz Tipp, spezifisch auf den Inhalt des Transkripts, das Szenario und die Hobbys/Rolle des Nutzers bezogen).`;
+"fillers" (Anzahl der Füllwörter im Transkript als Zahl, z.B. "also", "halt", "quasi", "irgendwie"),
+"aiTip" (Ein konkreter Coaching-Tipp in 2-3 Sätzen. Beziehe dich auf den INHALT des Gesagten UND auf die auffälligste der gemessenen Zahlen. Sprich den Nutzer direkt mit "du" an. Nenne eine konkrete Sache, die er beim nächsten Versuch anders machen soll — keine allgemeinen Floskeln).`;
 
   try {
     const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -60,7 +55,7 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgend
     if (!response.ok) {
       const errBody = await response.text().catch(() => '');
       console.error('Gemini API Fehler:', response.status, errBody);
-      res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', wpm: measuredWpm, pacingStatus: getPacingStatus(measuredWpm) });
+      res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
       return;
     }
 
@@ -68,7 +63,7 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgend
     const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!resultText) {
       console.error('Gemini: leere oder blockierte Antwort', data);
-      res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).', wpm: measuredWpm, pacingStatus: getPacingStatus(measuredWpm) });
+      res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).' });
       return;
     }
 
@@ -76,6 +71,6 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgend
     res.status(200).json(parsed);
   } catch (e) {
     console.error('AI Error:', e);
-    res.status(500).json({ error: 'Interner Fehler bei der KI-Analyse.', wpm: measuredWpm, pacingStatus: getPacingStatus(measuredWpm) });
+    res.status(500).json({ error: 'Interner Fehler bei der KI-Analyse.' });
   }
 }
