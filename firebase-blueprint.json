@@ -1,0 +1,46 @@
+{
+  "rules_version": "2",
+  "collections": [
+    {
+      "name": "users",
+      "path": "/users/{userId}",
+      "description": "User profiles and subscription state.",
+      "schema": {
+        "name": "string",
+        "role": "string",
+        "age": "string",
+        "hobbies": "string",
+        "isPremium": "boolean",
+        "createdAt": "timestamp"
+      },
+      "permissions": {
+        "read": "userId == request.auth.uid",
+        "create": "userId == request.auth.uid",
+        "update": "userId == request.auth.uid"
+      },
+      "subcollections": []
+    },
+    {
+      "name": "sessions",
+      "path": "/users/{userId}/sessions/{sessionId}",
+      "description": "User speaking practice sessions.",
+      "schema": {
+        "mode": "string",
+        "date": "timestamp",
+        "fillers": "number",
+        "wpm": "number",
+        "pauseCount": "number",
+        "dynamics": "number",
+        "speakingRatio": "number",
+        "aiTip": "string"
+      },
+      "permissions": {
+        "read": "userId == request.auth.uid",
+        "create": "userId == request.auth.uid",
+        "update": "userId == request.auth.uid",
+        "delete": "userId == request.auth.uid"
+      },
+      "subcollections": []
+    }
+  ]
+}

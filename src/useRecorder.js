@@ -56,11 +56,12 @@ export const getDynamicsLabel = (dynamics) => {
   return "Ausgewogen";
 };
 
-export function useRecorder(lang) {
+export function useRecorder(lang, withVideo = false) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [level, setLevel] = useState(0);
   const [error, setError] = useState(null);
+  const [stream, setStream] = useState(null);
 
   const transcriptRef = useRef('');
   const recognitionRef = useRef(null);
@@ -97,17 +98,18 @@ export function useRecorder(lang) {
     samplesRef.current = [];
     chunksRef.current = [];
 
-    let stream;
+    let streamObj;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamObj = await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo });
     } catch {
       setError('Kein Mikrofon-Zugriff. Bitte erlaube den Zugriff und versuch es erneut.');
       return false;
     }
-    streamRef.current = stream;
+    streamRef.current = streamObj;
+    setStream(streamObj);
 
     // Audio aufnehmen (bleibt lokal im Browser, wird nirgends hochgeladen)
-    const recorder = new MediaRecorder(stream);
+    const recorder = new MediaRecorder(streamObj);
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.start();
     mediaRecorderRef.current = recorder;
@@ -116,7 +118,7 @@ export function useRecorder(lang) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
-    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    audioCtx.createMediaStreamSource(streamObj).connect(analyser);
     audioCtxRef.current = audioCtx;
 
     const buffer = new Uint8Array(analyser.fftSize);
@@ -153,7 +155,7 @@ export function useRecorder(lang) {
     startedAtRef.current = Date.now();
     setIsRecording(true);
     return true;
-  }, [lang]);
+  }, [lang, withVideo]);
 
   const stop = useCallback(() => new Promise(resolve => {
     const durationMs = Date.now() - startedAtRef.current;
@@ -183,5 +185,5 @@ export function useRecorder(lang) {
     mediaRecorderRef.current = null;
   }), [cleanup]);
 
-  return { isRecording, transcript, level, error, start, stop };
+  return { isRecording, transcript, level, error, start, stop, stream };
 }
