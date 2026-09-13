@@ -63,7 +63,7 @@ const SessionCard = ({ session, profile }) => {
         <div className="flex items-center gap-3">
           <div className="text-right flex items-center gap-4">
             <div>
-              <div className="font-bold text-emerald-600">{session.confidenceScore ?? Math.max(0, Math.min(100, Math.round(100 - ((session.fillers||0) * 2) - (Math.abs((session.wpm || 130) - 130) * 0.5))))} <span className="text-xs font-normal text-slate-400">Score</span></div>
+              <div className="font-bold text-emerald-600">{session.confidenceScore === null ? '-' : (session.confidenceScore ?? Math.max(0, Math.min(100, Math.round(100 - ((session.fillers||0) * 2) - (Math.abs((session.wpm || 130) - 130) * 0.5)))))} <span className="text-xs font-normal text-slate-400">Score</span></div>
             </div>
             <div>
               <div className="font-bold text-indigo-600">{session.wpm} <span className="text-xs font-normal text-slate-400">WPM</span></div>
@@ -160,9 +160,10 @@ export const AnalyticsScreen = () => {
     setLoadingInsight(true);
     setInsightError('');
     try {
+      const token = await user?.getIdToken();
       const res = await fetch('/api/analyze-progress', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ history, profile })
       });
       if (!res.ok) throw new Error('Fehler beim Abrufen der Analyse.');

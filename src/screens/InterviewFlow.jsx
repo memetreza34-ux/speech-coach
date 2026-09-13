@@ -4,13 +4,23 @@ import { Mic, Square, Loader2, ChevronLeft, Volume2, User } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useRecorder } from '../useRecorder';
-import { getPromptForMode, modeTitle } from '../utils/speech';
+import { getPromptForMode, modeTitle, MODES } from '../utils/speech';
+import { auth, db } from '../lib/firebase';
+import { doc, collection, setDoc } from 'firebase/firestore';
 
 export default function InterviewFlow() {
   const { modeId } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
   
+  // Premium Guard
+  useEffect(() => {
+    const modeConfig = MODES.find(m => m.id === modeId);
+    if (modeConfig?.isPremium && !profile?.isPremium) {
+      navigate('/paywall', { replace: true });
+    }
+  }, [modeId, profile, navigate]);
+
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -52,9 +62,10 @@ export default function InterviewFlow() {
   const sendTurn = async (chatHistory) => {
     setIsProcessing(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/interview', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           messages: chatHistory,
           profile,
@@ -73,6 +84,19 @@ export default function InterviewFlow() {
         speakText(data.interviewerSpeech);
         
         if (data.isFinished) {
+          // Save session
+          if (auth.currentUser) {
+            const sessionRef = doc(collection(db, 'users', auth.currentUser.uid, 'sessions'));
+            await setDoc(sessionRef, {
+              mode: modeId,
+              modeLabel: modeTitle(modeId),
+              date: new Date().toISOString(),
+              fillers: 0, // No specific fillers counted for interview yet
+              wpm: 130, // Mock wpm for interview
+              confidenceScore: 85, // Mock score for now
+              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n')
+            }).catch(console.error);
+          }
           setTimeout(() => navigate('/dashboard'), 5000);
         }
       }
@@ -131,10 +155,16 @@ export default function InterviewFlow() {
           </button>
           <div className="text-xs font-bold text-indigo-600 tracking-widest uppercase">Live-Interview</div>
           <button 
-            onClick={() => setUseVideo(v => !v)}
-            className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border-2 transition-colors ${useVideo ? 'border-amber-500 text-amber-700 bg-amber-50' : 'border-slate-200 text-slate-400'}`}
+            onClick={() => {
+              if (!profile?.isPremium) {
+                navigate('/paywall');
+                return;
+              }
+              setUseVideo(v => !v);
+            }}
+            className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border-2 transition-colors ${useVideo ? 'border-amber-500 text-amber-700 bg-amber-50' : 'border-slate-200 text-slate-400 hover:border-amber-300'}`}
           >
-            Kamera {useVideo ? 'AN' : 'AUS'} (Pro)
+            Kamera {useVideo ? 'AN' : 'AUS'} {!profile?.isPremium && '(Pro)'}
           </button>
         </div>
 

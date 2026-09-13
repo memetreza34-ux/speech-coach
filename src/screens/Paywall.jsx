@@ -5,14 +5,32 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export const PaywallScreen = () => {
-  const { profile, updateProfile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(false);
 
   const handleSubscribe = async () => {
     // In a real app, this would redirect to Stripe Checkout.
-    // For this prototype, we just unlock it.
-    await updateProfile({ isPremium: true });
-    navigate('/arena');
+    // For this prototype, we call our secure upgrade endpoint.
+    setLoading(true);
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch('/api/upgrade', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        // Force reload to get updated profile from Firestore
+        window.location.href = '/arena';
+      } else {
+        alert('Upgrade fehlgeschlagen.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Upgrade fehlgeschlagen.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,9 +70,10 @@ export const PaywallScreen = () => {
         <motion.button 
           whileTap={{ scale: 0.98 }}
           onClick={handleSubscribe}
-          className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-4 rounded-xl font-medium transition-colors shadow-lg shadow-indigo-500/25"
+          disabled={loading || profile?.isPremium}
+          className={`w-full py-4 rounded-xl font-medium transition-colors shadow-lg ${loading || profile?.isPremium ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/25'} text-white`}
         >
-          {profile?.isPremium ? "Bereits abonniert" : "Jetzt freischalten"}
+          {loading ? "Wird verarbeitet..." : profile?.isPremium ? "Bereits abonniert" : "Jetzt freischalten"}
         </motion.button>
         
         <p className="text-xs text-slate-500 text-center mt-6">

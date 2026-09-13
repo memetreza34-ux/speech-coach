@@ -62,6 +62,56 @@ export const DashboardScreen = () => {
           </div>
         </div>
 
+        {/* Personalized Recommendation */}
+        {profile?.onboardingGoal && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Dein Trainingsplan</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {profile.onboardingGoal === 'sales' && (
+                <>
+                  <button onClick={() => navigate('/record/elevator_pitch')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm">
+                    <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Schritt 1</div>
+                    <div className="font-serif text-slate-900 leading-tight">Elevator Pitch</div>
+                  </button>
+                  <button onClick={() => navigate('/interview/sales_objection')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[8px] font-bold px-2 py-1 rounded-bl-lg uppercase tracking-wider">Pro</div>
+                    <div className="text-xs font-bold text-rose-600 uppercase tracking-wider mb-1">Schritt 2</div>
+                    <div className="font-serif text-slate-900 leading-tight">Einwände</div>
+                  </button>
+                </>
+              )}
+              {profile.onboardingGoal === 'career' && (
+                <>
+                  <button onClick={() => navigate('/record/interview')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm">
+                    <div className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Schritt 1</div>
+                    <div className="font-serif text-slate-900 leading-tight">HR Interview</div>
+                  </button>
+                  <button onClick={() => navigate('/interview/interview_interactive')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[8px] font-bold px-2 py-1 rounded-bl-lg uppercase tracking-wider">Pro</div>
+                    <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1">Schritt 2</div>
+                    <div className="font-serif text-slate-900 leading-tight">Live Interview</div>
+                  </button>
+                </>
+              )}
+              {profile.onboardingGoal === 'social' && (
+                <>
+                  <button onClick={() => navigate('/record/impromptu')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm">
+                    <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-1">Schritt 1</div>
+                    <div className="font-serif text-slate-900 leading-tight">Freies Sprechen</div>
+                  </button>
+                  <button onClick={() => navigate('/record/apology')} className="bg-white border border-slate-200 p-4 rounded-xl text-left hover:border-indigo-400 transition-colors shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[8px] font-bold px-2 py-1 rounded-bl-lg uppercase tracking-wider">Pro</div>
+                    <div className="text-xs font-bold text-cyan-600 uppercase tracking-wider mb-1">Schritt 2</div>
+                    <div className="font-serif text-slate-900 leading-tight">Entschuldigung</div>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Tages-Challenge */}
         <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-5 text-white mb-6 shadow-md relative overflow-hidden">
           <div className="relative z-10">

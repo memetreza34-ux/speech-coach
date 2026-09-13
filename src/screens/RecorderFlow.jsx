@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRecorder, getDynamicsLabel } from '../useRecorder';
-import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle } from '../utils/speech';
+import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle, MODES } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -58,6 +58,14 @@ export const RecorderFlow = () => {
   const navigate = useNavigate();
   const { profile, user } = useAuth();
   
+  // Premium Guard
+  useEffect(() => {
+    const modeConfig = MODES.find(m => m.id === modeId);
+    if (modeConfig?.isPremium && !profile?.isPremium) {
+      navigate('/paywall', { replace: true });
+    }
+  }, [modeId, profile, navigate]);
+
   const [subScreen, setSubScreen] = useState('recorder');
   const [analysisData, setAnalysisData] = useState(null);
   const [activeTab, setActiveTab] = useState('coach'); // 'coach' | 'transcript'

@@ -49,10 +49,11 @@ export const ProfileScreen = () => {
     setLoadingPersona(true);
     setPersonaError('');
     try {
+      const token = await user?.getIdToken();
       // Use current formData to ensure we use the latest inputs even if not fully saved to firebase yet
       const res = await fetch('/api/analyze-persona', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ profile: formData })
       });
       if (!res.ok) {

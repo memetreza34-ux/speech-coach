@@ -2,15 +2,71 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import admin from 'firebase-admin';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+if (!getApps().length) {
+  initializeApp({
+    projectId: 'laughing-technique-w53bd'
+  });
+}
+
+const db = getFirestore('ai-studio-speechcoach-a3524e75-2452-4cc3-b2c8-a766590f3df4');
+
+const requireAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+};
 
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests
+    message: { error: 'Too many requests' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
+  app.use('/api/', apiLimiter);
+  app.use('/api/', requireAuth);
+
+  // API Route for Upgrade (Simulated Stripe Webhook / Entitlement)
+  app.post('/api/upgrade', async (req, res) => {
+    try {
+      const uid = req.user.uid;
+      await db.collection('users').doc(uid).update({
+        isPremium: true
+      });
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error('Upgrade Error:', e);
+      return res.status(500).json({ error: 'Upgrade failed.' });
+    }
+  });
 
   // API Route ported from api/analyze.js
   app.post('/api/analyze', async (req, res) => {

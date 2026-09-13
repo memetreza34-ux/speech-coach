@@ -1,3 +1,5 @@
+import { auth } from '../lib/firebase';
+
 export const getPacingStatus = (wpm) => {
   if (wpm < 110) return "Zu langsam";
   if (wpm > 160) return "Zu schnell";
@@ -156,16 +158,17 @@ export const analyzeTranscript = async (recording, mode, profile) => {
   };
   measured.pacingStatus = getPacingStatus(measured.wpm);
 
-  const fallback = (aiTip) => ({ ...measured, fillers: countFillers(transcript), aiTip, isDummy: true });
+  const fallback = (aiTip) => ({ ...measured, fillers: countFillers(transcript), confidenceScore: null, aiTip, isDummy: true });
 
   if (!transcript.trim()) {
     return fallback("Es wurde kein Text erkannt. Sprich etwas lauter oder prüfe dein Mikrofon.");
   }
 
   try {
+    const token = await auth.currentUser?.getIdToken();
     const response = await fetch('/api/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ transcript, mode, profile, metrics: measured, customPrompt: promptContext, frames })
     });
 

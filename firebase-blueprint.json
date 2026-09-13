@@ -11,12 +11,16 @@
         "age": "string",
         "hobbies": "string",
         "isPremium": "boolean",
-        "createdAt": "timestamp"
+        "createdAt": "timestamp",
+        "isOnboarded": "boolean",
+        "onboardingGoal": "string",
+        "onboardingFrequency": "string",
+        "customModes": "array"
       },
       "permissions": {
         "read": "userId == request.auth.uid",
         "create": "userId == request.auth.uid",
-        "update": "userId == request.auth.uid"
+        "update": "userId == request.auth.uid && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium']))"
       },
       "subcollections": []
     },
@@ -26,13 +30,17 @@
       "description": "User speaking practice sessions.",
       "schema": {
         "mode": "string",
+        "modeLabel": "string",
         "date": "timestamp",
         "fillers": "number",
         "wpm": "number",
         "pauseCount": "number",
         "dynamics": "number",
         "speakingRatio": "number",
-        "aiTip": "string"
+        "confidenceScore": "number",
+        "pacingStatus": "string",
+        "transcript": "string",
+        "aiTip": "object"
       },
       "permissions": {
         "read": "userId == request.auth.uid",
