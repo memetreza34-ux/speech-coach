@@ -57,7 +57,7 @@ const SessionCard = ({ session, profile }) => {
         onClick={() => setExpanded(!expanded)}
       >
         <div>
-          <div className="font-semibold text-slate-900">{getDisplayTitle(session.mode)}</div>
+          <div className="font-semibold text-slate-900">{session.modeLabel || getDisplayTitle(session.mode)}</div>
           <div className="text-xs text-slate-500 mt-1">{date}</div>
         </div>
         <div className="flex items-center gap-3">

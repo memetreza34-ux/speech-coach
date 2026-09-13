@@ -122,6 +122,7 @@ export const RecorderFlow = () => {
         const sessionRef = doc(collection(db, 'users', user.uid, 'sessions'));
         await setDoc(sessionRef, {
           mode: modeId,
+          modeLabel: displayTitle,
           date: new Date().toISOString(),
           fillers: result.fillers,
           wpm: result.wpm,

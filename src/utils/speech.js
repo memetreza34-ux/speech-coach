@@ -115,8 +115,21 @@ export const getLocaleForMode = (id) => {
 
 export const computeStreak = (history) => {
   const daySet = new Set(history.map(h => new Date(h.date).toDateString()));
-  const cursor = new Date();
   let streak = 0;
+  
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  
+  let cursor = new Date();
+  if (!daySet.has(today.toDateString())) {
+    if (daySet.has(yesterday.toDateString())) {
+      cursor = yesterday;
+    } else {
+      return 0;
+    }
+  }
+
   while (daySet.has(cursor.toDateString())) {
     streak++;
     cursor.setDate(cursor.getDate() - 1);
@@ -127,7 +140,7 @@ export const computeStreak = (history) => {
 export const computeLevel = (history) => Math.min(99, Math.floor(history.length / 3) + 1);
 
 export const analyzeTranscript = async (recording, mode, profile) => {
-  const { transcript, durationMs, pauseCount, longestPauseMs, speakingRatio, dynamics } = recording;
+  const { transcript, durationMs, pauseCount, longestPauseMs, speakingRatio, dynamics, frames } = recording;
   const minutes = Math.max(durationMs / 60000, 1 / 60);
   
   const isCustom = mode.startsWith('custom_');
@@ -153,7 +166,7 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, mode, profile, metrics: measured, customPrompt: promptContext })
+      body: JSON.stringify({ transcript, mode, profile, metrics: measured, customPrompt: promptContext, frames })
     });
 
     if (!response.ok) {
@@ -165,8 +178,8 @@ export const analyzeTranscript = async (recording, mode, profile) => {
       return fallback(tip);
     }
 
-    const { fillers, aiTip } = await response.json();
-    return { ...measured, fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), aiTip };
+    const { fillers, confidenceScore, aiTip } = await response.json();
+    return { ...measured, fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), confidenceScore: confidenceScore || 0, aiTip };
   } catch (e) {
     console.error("AI Error:", e);
     return fallback("Der Analyse-Server ist nicht erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.");

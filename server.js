@@ -8,9 +8,9 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
   // API Route ported from api/analyze.js
   app.post('/api/analyze', async (req, res) => {
@@ -183,8 +183,8 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
     
     // Prepare history summary
     const historySummary = history.slice(0, 20).map((session, i) => {
-      const date = new Date(session.timestamp).toLocaleDateString('de-DE');
-      return `Session ${i + 1} (${date}): Modus: ${session.mode}, Dauer: ${session.metrics.durationMs}ms, WPM: ${session.metrics.wpm}, Füllwörter: ${session.fillers}, Confidence Score: ${session.confidenceScore}`;
+      const date = new Date(session.date || session.timestamp || Date.now()).toLocaleDateString('de-DE');
+      return `Session ${i + 1} (${date}): Modus: ${session.mode || 'unbekannt'}, Dauer: ${session.durationMs || '?'}ms, WPM: ${session.wpm || '?'}, Füllwörter: ${session.fillers || '?'}, Confidence Score: ${session.confidenceScore || '?'}`;
     }).join('\n');
 
     const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Der Nutzer hat mich gebeten, seinen Langzeit-Fortschritt zu analysieren.
@@ -290,7 +290,7 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
   } else {
     const distPath = path.join(__dirname, 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get(/(.*)/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

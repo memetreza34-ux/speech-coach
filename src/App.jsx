@@ -11,6 +11,7 @@ import { AnalyticsScreen } from './screens/Analytics';
 import { AcademyScreen } from './screens/Academy';
 import { ProfileScreen } from './screens/Profile';
 import { PaywallScreen } from './screens/Paywall';
+import { OnboardingScreen } from './screens/Onboarding';
 import { RecorderFlow } from './screens/RecorderFlow';
 import InterviewFlow from './screens/InterviewFlow';
 
@@ -25,7 +26,7 @@ const BottomNav = () => {
   ];
 
   // Hide nav on specific screens
-  if (['/', '/paywall'].includes(location.pathname) || location.pathname.startsWith('/record') || location.pathname.startsWith('/interview')) {
+  if (['/', '/paywall', '/onboarding'].includes(location.pathname) || location.pathname.startsWith('/record') || location.pathname.startsWith('/interview')) {
     return null;
   }
 
@@ -43,10 +44,13 @@ const BottomNav = () => {
   );
 };
 
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, requireOnboarding = true }) => {
+  const { user, profile, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
+  if (requireOnboarding && profile && !profile.isOnboarded) {
+    return <Navigate to="/onboarding" replace />;
+  }
   return children;
 };
 
@@ -57,6 +61,7 @@ const AppRoutes = () => {
       <AnimatePresence mode="wait">
         <Routes>
           <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LoginScreen />} />
+          <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingScreen /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
           <Route path="/arena" element={<ProtectedRoute><ArenaScreen /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><AnalyticsScreen /></ProtectedRoute>} />

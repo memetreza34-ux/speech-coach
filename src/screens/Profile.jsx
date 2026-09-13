@@ -187,7 +187,7 @@ export const ProfileScreen = () => {
             <h3 className="font-bold text-sm uppercase tracking-wider">Datenschutz</h3>
           </div>
           <p className="text-xs leading-relaxed">
-            Deine Audiodaten werden ausschließlich zur Transkription genutzt. Für das Coaching-Feedback (via Google Gemini) wird nur der erkannte Text sicher übertragen. Es werden keine Audiodaten gespeichert.
+            Deine Audiodaten werden zur Transkription genutzt (oftmals serverseitig durch den Browser). Für das Coaching-Feedback werden der erkannte Text, berechnete Metriken, Profilinformationen und (bei aktiver Kamera) Einzelbilder sicher an Google Gemini übertragen.
           </p>
         </div>
 

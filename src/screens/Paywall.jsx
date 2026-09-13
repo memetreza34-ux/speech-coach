@@ -58,7 +58,7 @@ export const PaywallScreen = () => {
         </motion.button>
         
         <p className="text-xs text-slate-500 text-center mt-6">
-          Zahlung wird über Stripe sicher abgewickelt. Es gelten unsere AGB (Widerrufsrecht 14 Tage).
+          Dies ist eine Demo-Version. Für den Prototyp wird Premium sofort freigeschaltet (keine echte Zahlung via Stripe nötig).
         </p>
       </div>
     </div>

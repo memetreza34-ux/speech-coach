@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { computeLevel, computeStreak, modeTitle, getDailyChallenge } from '../utils/speech';
 import { useNavigate } from 'react-router-dom';
-import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain } from 'lucide-react';
+import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain, Flame } from 'lucide-react';
 
 export const DashboardScreen = () => {
   const { profile, user } = useAuth();
@@ -15,7 +15,7 @@ export const DashboardScreen = () => {
   useEffect(() => {
     if (!user) return;
     const fetchHistory = async () => {
-      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'), limit(5));
+      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'), limit(100));
       const snap = await getDocs(q);
       const data = snap.docs.map(d => d.data());
       setHistory(data);
@@ -48,11 +48,18 @@ export const DashboardScreen = () => {
             <div className="text-xs font-bold text-slate-500 tracking-widest uppercase mb-1">Willkommen zurück</div>
             <h1 className="text-3xl font-serif text-slate-900">{profile?.name || 'Speaker'}</h1>
           </div>
-          {!profile?.isPremium && (
-            <button onClick={() => navigate('/paywall')} className="flex items-center gap-1.5 bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-indigo-200 transition-colors">
-              <Crown size={14} /> Pro
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {streak > 0 && (
+              <div className="flex items-center gap-1.5 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide">
+                <Flame size={14} className="fill-orange-500 text-orange-500" /> {streak}
+              </div>
+            )}
+            {!profile?.isPremium && (
+              <button onClick={() => navigate('/paywall')} className="flex items-center gap-1.5 bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-indigo-200 transition-colors">
+                <Crown size={14} /> Pro
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tages-Challenge */}
@@ -145,7 +152,7 @@ export const DashboardScreen = () => {
                       <Brain size={16} className="text-indigo-500" />
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-800 text-sm">{getDisplayTitle(s.mode)}</div>
+                      <div className="font-semibold text-slate-800 text-sm">{s.modeLabel || getDisplayTitle(s.mode)}</div>
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{new Date(s.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })}</div>
                     </div>
                   </div>
