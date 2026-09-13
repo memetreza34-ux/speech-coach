@@ -2,7 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
-      allow read, create: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && 
+                    (!request.resource.data.keys().hasAll(['isPremium']) || request.resource.data.isPremium == false);
       // Prevent users from granting themselves premium status via the client SDK
       allow update: if request.auth != null && request.auth.uid == userId && 
                     (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium']));

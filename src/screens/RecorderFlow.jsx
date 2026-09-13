@@ -138,9 +138,10 @@ export const RecorderFlow = () => {
           pauseCount: result.pauseCount,
           dynamics: result.dynamics,
           speakingRatio: result.speakingRatio,
-          confidenceScore: result.confidenceScore || 0,
+          confidenceScore: result.confidenceScore,
           aiTip: result.aiTip,
-          transcript: recording.transcript // Now saving transcript!
+          transcript: recording.transcript, // Now saving transcript!
+          durationMs: recording.durationMs
         });
       }
       
@@ -228,7 +229,7 @@ export const RecorderFlow = () => {
             <div className="text-xs font-bold text-slate-500 tracking-widest uppercase mb-2">Auswertung</div>
             <h2 className="text-3xl font-serif text-slate-900 mb-6">Deine <span className="text-indigo-600 italic">Werte</span></h2>
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <MetricCard label="Score" value={analysisData.confidenceScore || 0} hint="Souveränität (0-100)" alert={analysisData.confidenceScore < 50} />
+              <MetricCard label="Score" value={analysisData.confidenceScore === null ? '-' : (analysisData.confidenceScore ?? 0)} hint="Souveränität (0-100)" alert={analysisData.confidenceScore !== null && analysisData.confidenceScore < 50} />
               <MetricCard label="Tempo" value={analysisData.wpm} hint={`WPM · ${analysisData.pacingStatus}`} />
               <MetricCard label="Füllwörter" value={analysisData.fillers} alert={analysisData.fillers > 5} />
               <MetricCard label="Pausen" value={analysisData.pauseCount ?? 0} hint={analysisData.longestPauseMs ? `längste ${(analysisData.longestPauseMs / 1000).toFixed(1)}s` : null} />

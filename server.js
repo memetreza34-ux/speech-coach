@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import admin from 'firebase-admin';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -50,6 +49,22 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  const PREMIUM_MODES = [
+    'interview_interactive', 'sales_objection', 'presentation', 'pitch', 
+    'negotiation', 'resignation', 'conflict', 'wedding', 'apology', 
+    'vision', 'excuses', 'crisis', 'panel', 'lang_fr', 'lang_es'
+  ];
+
+  const verifyPremiumMode = async (req, res, mode) => {
+    if (mode && PREMIUM_MODES.includes(mode)) {
+      const userDoc = await db.collection('users').doc(req.user.uid).get();
+      if (!userDoc.exists || userDoc.data().isPremium !== true) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
   app.use('/api/', apiLimiter);
   app.use('/api/', requireAuth);
@@ -78,6 +93,12 @@ async function startServer() {
     }
 
     const { transcript, mode, profile, metrics, customPrompt, frames } = req.body || {};
+    
+    // Server-side Premium Check
+    if (!(await verifyPremiumMode(req, res, mode))) {
+      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
+    }
+
     if (typeof transcript !== 'string' || !transcript.trim()) {
       return res.status(400).json({ error: 'Transkript fehlt oder ist leer.' });
     }
@@ -160,7 +181,13 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
 
-    const { messages, profile, customPrompt, frames } = req.body || {};
+    const { mode, messages, profile, customPrompt, frames } = req.body || {};
+    
+    // Server-side Premium Check
+    if (!(await verifyPremiumMode(req, res, mode))) {
+      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
+    }
+
     if (!Array.isArray(messages)) return res.status(400).json({ error: 'Messages fehlt.' });
 
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
@@ -338,6 +365,7 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

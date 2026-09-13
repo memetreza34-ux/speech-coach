@@ -179,21 +179,17 @@ export const AnalyticsScreen = () => {
 
   // Aggregate Data
   const chartData = [...history].reverse().map((s, i) => {
-    // Fallback calculation for older sessions without confidenceScore
-    let conf = s.confidenceScore;
-    if (typeof conf !== 'number') {
-      conf = Math.max(0, Math.min(100, Math.round(100 - (s.fillers * 2) - (Math.abs((s.wpm || 130) - 130) * 0.5))));
-    }
     return {
       name: `S${i + 1}`,
       wpm: s.wpm,
       fillers: s.fillers,
-      confidence: conf
+      confidence: typeof s.confidenceScore === 'number' ? s.confidenceScore : null
     };
   });
 
-  const avgWpm = history.length ? Math.round(history.reduce((acc, curr) => acc + curr.wpm, 0) / history.length) : 0;
-  const totalFillers = history.reduce((acc, curr) => acc + (curr.fillers || 0), 0);
+  const sessionsWithWpm = history.filter(s => typeof s.wpm === 'number');
+  const avgWpm = sessionsWithWpm.length ? Math.round(sessionsWithWpm.reduce((acc, curr) => acc + curr.wpm, 0) / sessionsWithWpm.length) : 0;
+  const totalFillers = history.reduce((acc, curr) => acc + (typeof curr.fillers === 'number' ? curr.fillers : 0), 0);
 
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10 pb-28 overflow-y-auto" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>

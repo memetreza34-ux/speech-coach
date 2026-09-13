@@ -67,6 +67,7 @@ export default function InterviewFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
+          mode: modeId,
           messages: chatHistory,
           profile,
           customPrompt: `${modeTitle(modeId)} - ${getPromptForMode(modeId)}`,
@@ -91,9 +92,12 @@ export default function InterviewFlow() {
               mode: modeId,
               modeLabel: modeTitle(modeId),
               date: new Date().toISOString(),
-              fillers: 0, // No specific fillers counted for interview yet
-              wpm: 130, // Mock wpm for interview
-              confidenceScore: 85, // Mock score for now
+              fillers: null,
+              wpm: null,
+              confidenceScore: null,
+              dynamics: null,
+              speakingRatio: null,
+              durationMs: null,
               transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n')
             }).catch(console.error);
           }

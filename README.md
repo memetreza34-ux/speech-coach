@@ -12,7 +12,8 @@ Zusätzlich werden Aufrufe über Firebase Auth ID-Tokens authentifiziert und via
 
 1. `.env.example` nach `.env.local` kopieren.
 2. `GEMINI_API_KEY` in `.env.local` eintragen.
-3. Server und Frontend starten:
+3. Da das Backend Firebase Admin nutzt, benötigst du lokal Application Default Credentials (ADC) oder ein Service Account Key JSON, falls du nicht in der Google Cloud Umgebung bist (z.B. `export GOOGLE_APPLICATION_CREDENTIALS="path/to/key.json"`).
+4. Server und Frontend starten:
    ```bash
    npm run dev
    ```
