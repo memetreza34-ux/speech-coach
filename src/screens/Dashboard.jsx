@@ -28,7 +28,9 @@ export const DashboardScreen = () => {
   const totalSessions = history.length;
   const sessionsToNextLevel = 3 - (totalSessions % 3);
   const progressPercent = totalSessions === 0 ? 0 : ((totalSessions % 3) / 3) * 100;
-  const lastWpm = history.length > 0 ? history[0].wpm : 0;
+  
+  const validWpmSession = history.find(s => s.wpm && s.wpm > 0);
+  const lastWpm = validWpmSession ? validWpmSession.wpm : '–';
 
   const getDisplayTitle = (id) => {
     if (id?.startsWith('custom_')) {
@@ -230,8 +232,8 @@ export const DashboardScreen = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-slate-900">{s.wpm} <span className="font-normal text-slate-500 text-xs">WPM</span></div>
-                    <div className="text-xs text-slate-500">{s.fillers} FW</div>
+                    <div className="text-sm font-bold text-slate-900">{s.wpm ?? '–'} <span className="font-normal text-slate-500 text-xs">WPM</span></div>
+                    <div className="text-xs text-slate-500">{s.fillers ?? '–'} FW</div>
                   </div>
                 </div>
               ))}

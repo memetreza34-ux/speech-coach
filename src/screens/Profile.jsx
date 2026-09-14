@@ -1,13 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2 } from 'lucide-react';
+import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2, Trash2 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { computeLevel, computeStreak } from '../utils/speech';
 
+const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Löschen" }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+        <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
+        <p className="text-sm text-slate-600 mb-6">{message}</p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-medium hover:bg-slate-200">Abbrechen</button>
+          <button onClick={onConfirm} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700">{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const ProfileScreen = () => {
-  const { profile, updateProfile, logout, deleteAccount, user } = useAuth();
+  const { profile, updateProfile, logout, deleteAccount, deleteTrainingData, user } = useAuth();
   const [formData, setFormData] = useState({
     name: profile?.name || '',
     role: profile?.role || '',
@@ -15,16 +31,19 @@ export const ProfileScreen = () => {
     hobbies: profile?.hobbies || ''
   });
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const [history, setHistory] = useState([]);
   
   const [aiPersona, setAiPersona] = useState(null);
   const [loadingPersona, setLoadingPersona] = useState(false);
   const [personaError, setPersonaError] = useState('');
 
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null });
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const fetchHistory = async () => {
-      // Fetch more for accurate level/streak across history
       const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'));
       const snap = await getDocs(q);
       const data = snap.docs.map(d => d.data());
@@ -40,9 +59,16 @@ export const ProfileScreen = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    await updateProfile(formData);
-    setSaving(false);
-    // Optional: Auto-refresh persona if they changed data? Better leave manual.
+    setSaveMessage('');
+    try {
+      await updateProfile(formData);
+      setSaveMessage('Erfolgreich gespeichert!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (e) {
+      setSaveMessage('Fehler beim Speichern.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const generatePersona = async () => {
@@ -50,7 +76,6 @@ export const ProfileScreen = () => {
     setPersonaError('');
     try {
       const token = await user?.getIdToken();
-      // Use current formData to ensure we use the latest inputs even if not fully saved to firebase yet
       const res = await fetch('/api/analyze-persona', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -70,10 +95,36 @@ export const ProfileScreen = () => {
     }
   };
 
+  const executeDelete = async () => {
+    setIsDeleting(true);
+    try {
+      if (confirmModal.type === 'account') {
+        await deleteAccount();
+      } else if (confirmModal.type === 'data') {
+        await deleteTrainingData();
+        setHistory([]);
+        setConfirmModal({ isOpen: false, type: null });
+      }
+    } catch (e) {
+      alert("Fehler beim Löschen. Bitte versuche es erneut.");
+      setConfirmModal({ isOpen: false, type: null });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const canGeneratePersona = formData.role.length > 2 || formData.hobbies.length > 2;
 
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10 pb-28 overflow-y-auto" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.type === 'account' ? 'Account endgültig löschen?' : 'Trainingsdaten löschen?'}
+        message={confirmModal.type === 'account' ? 'Dein Account und alle damit verbundenen Daten werden unwiderruflich gelöscht.' : 'Alle deine Trainingssessions und Analysen werden gelöscht. Dein Profil bleibt erhalten.'}
+        onConfirm={executeDelete}
+        onCancel={() => setConfirmModal({ isOpen: false, type: null })}
+        confirmText={isDeleting ? "Löscht..." : "Endgültig löschen"}
+      />
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-3xl font-serif text-slate-900 mb-8">Profil</h1>
         
@@ -107,7 +158,10 @@ export const ProfileScreen = () => {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-8 space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Persönliche Daten</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Persönliche Daten</h3>
+            {saveMessage && <span className="text-xs text-indigo-600 font-medium">{saveMessage}</span>}
+          </div>
           <p className="text-xs text-slate-500 mb-6">Diese Daten helfen der KI, die Coaching-Szenarien und das Feedback an dich anzupassen.</p>
 
           <div>
@@ -183,30 +237,32 @@ export const ProfileScreen = () => {
         </div>
 
         <div className="bg-slate-200/50 rounded-2xl p-6 mb-8 text-slate-600">
-          <div className="flex items-center gap-3 mb-2 text-slate-700">
+          <div className="flex items-center gap-3 mb-4 text-slate-700">
             <ShieldAlert size={20} />
             <h3 className="font-bold text-sm uppercase tracking-wider">Datenschutz & Account</h3>
           </div>
-          <p className="text-xs leading-relaxed mb-4">
-            Deine Audiodaten werden zur Transkription genutzt (oftmals serverseitig durch den Browser). Für das Coaching-Feedback werden der erkannte Text, berechnete Metriken, Profilinformationen und (bei aktiver Kamera) Einzelbilder sicher an Google Gemini übertragen.
-          </p>
-          <button 
-            onClick={async () => {
-              if (window.confirm("Bist du sicher, dass du deinen Account und alle Daten unwiderruflich löschen möchtest?")) {
-                try {
-                  await deleteAccount();
-                } catch (e) {
-                  alert("Fehler beim Löschen. Bitte melde dich ab und wieder an, um es erneut zu versuchen.");
-                }
-              }
-            }}
-            className="text-xs text-red-600 underline font-medium"
-          >
-            Account endgültig löschen
-          </button>
+          
+          <div className="space-y-4">
+            <button 
+              onClick={() => setConfirmModal({ isOpen: true, type: 'data' })}
+              className="w-full flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-700"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 size={16} /> Trainingsdaten löschen
+              </div>
+            </button>
+            <button 
+              onClick={() => setConfirmModal({ isOpen: true, type: 'account' })}
+              className="w-full flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium hover:bg-slate-50 text-red-600"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldAlert size={16} /> Account endgültig löschen
+              </div>
+            </button>
+          </div>
         </div>
 
-        <button onClick={logout} className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-red-600 py-3.5 rounded-xl font-medium transition-colors hover:bg-slate-50">
+        <button onClick={logout} className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl font-medium transition-colors hover:bg-slate-50">
           <LogOut size={18} /> Abmelden
         </button>
       </div>

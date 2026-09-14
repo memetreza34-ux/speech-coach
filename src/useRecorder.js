@@ -5,23 +5,23 @@ const MIN_PAUSE_MS = 600;      // ab dieser Länge zählt eine Sprechpause
 const SAMPLE_INTERVAL_MS = 50;
 
 // Pausen, Redeanteil und Dynamik aus den Lautstärke-Samples ableiten.
-const analyzeSamples = (samples, durationMs) => {
+const analyzeSamples = (samples, durationMs, threshold) => {
   if (samples.length === 0) {
     return { pauseCount: 0, longestPauseMs: 0, speakingRatio: 0, dynamics: 0, durationMs };
   }
 
-  const speaking = samples.filter(rms => rms >= SILENCE_RMS);
+  const speaking = samples.filter(rms => rms >= threshold);
   const speakingRatio = speaking.length / samples.length;
 
   // Stille-Blöcke zählen, führende/abschließende Stille ignorieren
-  const firstVoice = samples.findIndex(rms => rms >= SILENCE_RMS);
-  const lastVoice = samples.length - 1 - [...samples].reverse().findIndex(rms => rms >= SILENCE_RMS);
+  const firstVoice = samples.findIndex(rms => rms >= threshold);
+  const lastVoice = samples.length - 1 - [...samples].reverse().findIndex(rms => rms >= threshold);
 
   let pauseCount = 0;
   let longestPauseMs = 0;
   let run = 0;
   for (let i = firstVoice; i <= lastVoice && firstVoice !== -1; i++) {
-    if (samples[i] < SILENCE_RMS) {
+    if (samples[i] < threshold) {
       run++;
     } else {
       const runMs = run * SAMPLE_INTERVAL_MS;
@@ -72,6 +72,7 @@ export function useRecorder(lang, withVideo = false) {
   const samplesRef = useRef([]);
   const chunksRef = useRef([]);
   const startedAtRef = useRef(0);
+  const silenceThresholdRef = useRef(SILENCE_RMS);
 
   const cleanup = useCallback(() => {
     clearInterval(timerRef.current);
@@ -108,12 +109,6 @@ export function useRecorder(lang, withVideo = false) {
     streamRef.current = streamObj;
     setStream(streamObj);
 
-    // Audio aufnehmen (bleibt lokal im Browser, wird nirgends hochgeladen)
-    const recorder = new MediaRecorder(streamObj);
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-
     // Pegel messen für Pausen, Redeanteil und Dynamik
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
@@ -122,6 +117,29 @@ export function useRecorder(lang, withVideo = false) {
     audioCtxRef.current = audioCtx;
 
     const buffer = new Uint8Array(analyser.fftSize);
+    
+    // Adaptive Noise Floor Calibration (ca. 300ms)
+    let calibrationSamples = [];
+    for(let k=0; k<6; k++) {
+      analyser.getByteTimeDomainData(buffer);
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        const v = (buffer[i] - 128) / 128;
+        sum += v * v;
+      }
+      calibrationSamples.push(Math.sqrt(sum / buffer.length));
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const noiseFloor = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
+    // Set threshold slightly above noise floor, but within safe bounds
+    silenceThresholdRef.current = Math.max(0.015, Math.min(0.08, noiseFloor * 2.0));
+
+    // Audio aufnehmen (bleibt lokal im Browser, wird nirgends hochgeladen)
+    const recorder = new MediaRecorder(streamObj);
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+
     timerRef.current = setInterval(() => {
       analyser.getByteTimeDomainData(buffer);
       let sum = 0;
@@ -169,7 +187,7 @@ export function useRecorder(lang, withVideo = false) {
       resolve({
         transcript: transcriptRef.current,
         audioUrl,
-        ...analyzeSamples(samples, durationMs)
+        ...analyzeSamples(samples, durationMs, silenceThresholdRef.current)
       });
     };
 

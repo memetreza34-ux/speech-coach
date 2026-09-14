@@ -7,7 +7,7 @@ import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle, MODES
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import { doc, collection, setDoc } from 'firebase/firestore';
+import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const BAR_COUNT = 21;
 const barScale = (i) => 1 - (Math.abs(i - (BAR_COUNT - 1) / 2) / ((BAR_COUNT - 1) / 2)) * 0.7;
@@ -131,7 +131,8 @@ export const RecorderFlow = () => {
         await setDoc(sessionRef, {
           mode: modeId,
           modeLabel: displayTitle,
-          date: new Date().toISOString(),
+          date: new Date().toISOString(), // Fallback for local quick render
+          timestamp: serverTimestamp(),
           sessionType: 'recording',
           fillers: result.fillers,
           wpm: result.wpm,

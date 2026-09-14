@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import admin from 'firebase-admin';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -69,6 +68,103 @@ async function startServer() {
   app.use('/api/', apiLimiter);
   app.use('/api/', requireAuth);
 
+  // API Route for Account Deletion
+  app.delete('/api/account', async (req, res) => {
+    try {
+      const uid = req.user.uid;
+
+      // Delete all sessions in a batch
+      const sessionsRef = db.collection('users').doc(uid).collection('sessions');
+      const sessionsSnapshot = await sessionsRef.get();
+      
+      const batch = db.batch();
+      sessionsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      // Delete user document
+      await db.collection('users').doc(uid).delete();
+
+      // Delete Firebase Auth user
+      await getAuth().deleteUser(uid);
+
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error('Account Delete Error:', e);
+      return res.status(500).json({ error: 'Fehler beim Löschen des Accounts.' });
+    }
+  });
+
+  // API Route for Training Data Deletion
+  app.delete('/api/account/data', async (req, res) => {
+    try {
+      const uid = req.user.uid;
+      const sessionsRef = db.collection('users').doc(uid).collection('sessions');
+      const sessionsSnapshot = await sessionsRef.get();
+      
+      const batch = db.batch();
+      sessionsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error('Data Delete Error:', e);
+      return res.status(500).json({ error: 'Fehler beim Löschen der Daten.' });
+    }
+  });
+
+  // API Route for creating Custom Modes
+  app.post('/api/custom-modes', async (req, res) => {
+    try {
+      const { title, prompt } = req.body || {};
+      const uid = req.user.uid;
+      
+      if (typeof title !== 'string' || !title.trim() || title.trim().length > 25) {
+        return res.status(400).json({ error: 'Titel ungültig (max. 25 Zeichen).' });
+      }
+      if (typeof prompt !== 'string' || !prompt.trim() || prompt.trim().length > 1500) {
+        return res.status(400).json({ error: 'Szenario ungültig (max. 1500 Zeichen).' });
+      }
+
+      const userDocRef = db.collection('users').doc(uid);
+      const userDoc = await userDocRef.get();
+      
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: 'Benutzer nicht gefunden.' });
+      }
+      
+      const data = userDoc.data();
+      const customModes = data.customModes || [];
+      const isPremium = data.isPremium === true;
+      
+      if (!isPremium && customModes.length >= 1) {
+        return res.status(403).json({ error: 'Free-Nutzer können maximal 1 eigenes Szenario erstellen.' });
+      }
+      
+      const newMode = {
+        id: `custom_${Date.now()}`,
+        title: title.trim(),
+        prompt: prompt.trim(),
+        category: 'custom',
+        isPremium: false,
+        color: 'from-fuchsia-500 to-pink-600',
+        icon: 'Zap'
+      };
+      
+      await userDocRef.update({
+        customModes: [...customModes, newMode]
+      });
+      
+      return res.status(200).json({ success: true, mode: newMode });
+    } catch (e) {
+      console.error('Custom Mode Create Error:', e);
+      return res.status(500).json({ error: 'Fehler beim Erstellen des Szenarios.' });
+    }
+  });
+
   // API Route for Upgrade (Simulated Stripe Webhook / Entitlement)
   app.post('/api/upgrade', async (req, res) => {
     if (process.env.ALLOW_DEMO_PREMIUM !== 'true') {
@@ -86,9 +182,7 @@ async function startServer() {
     }
   });
 
-  // API Route ported from api/analyze.js
   app.post('/api/analyze', async (req, res) => {
-    const MAX_TRANSCRIPT_LENGTH = 4000;
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
@@ -102,32 +196,57 @@ async function startServer() {
       return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
     }
 
-    if (typeof transcript !== 'string' || !transcript.trim()) {
-      return res.status(400).json({ error: 'Transkript fehlt oder ist leer.' });
+    if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
+      return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
+    }
+    
+    if (frames && (!Array.isArray(frames) || frames.length > 5)) {
+      return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
+    }
+    if (frames) {
+      for (const frame of frames) {
+        if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) {
+           return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
+        }
+      }
     }
 
-    const safeTranscript = transcript.slice(0, MAX_TRANSCRIPT_LENGTH);
+    const safeTranscript = transcript;
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
+    // Ensure profile fields are strings and trimmed
+    const profileName = typeof safeProfile.name === 'string' ? safeProfile.name.slice(0, 100) : '';
+    const profileRole = typeof safeProfile.role === 'string' ? safeProfile.role.slice(0, 100) : '';
+    const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
+    const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
+
     const m = metrics && typeof metrics === 'object' ? metrics : {};
-    const contextPrompt = customPrompt ? `Das Szenario ist: "${customPrompt}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
+    // Validate metrics fields
+    const wpm = typeof m.wpm === 'number' ? m.wpm : '?';
+    const pauseCount = typeof m.pauseCount === 'number' ? m.pauseCount : '?';
+    const longestPauseMs = typeof m.longestPauseMs === 'number' ? m.longestPauseMs : '?';
+    const speakingRatio = typeof m.speakingRatio === 'number' ? m.speakingRatio : '?';
+    const dynamics = typeof m.dynamics === 'number' ? m.dynamics : '?';
+    const pacingStatus = typeof m.pacingStatus === 'string' ? m.pacingStatus : '?';
+    
+    const contextPrompt = customPrompt ? `Das Szenario ist: "${customPrompt.slice(0, 1500)}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
 
     const promptText = `Du bist ein professioneller Kommunikationstrainer. Analysiere den folgenden Sprech-Versuch eines Nutzers.
-Nutzer-Profil: Name: ${safeProfile.name || ''}, Rolle: ${safeProfile.role || ''}, Alter: ${safeProfile.age || ''}, Hobbys: ${safeProfile.hobbies || ''}.
+Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
 ${contextPrompt}
 
 Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst sie nicht berechnen):
-- Sprechtempo: ${m.wpm ?? '?'} Wörter/Minute (${m.pacingStatus ?? '?'})
-- Sprechpausen über 0,6s: ${m.pauseCount ?? '?'} (längste: ${m.longestPauseMs ? (m.longestPauseMs / 1000).toFixed(1) + 's' : '?'})
-- Redeanteil: ${m.speakingRatio ?? '?'}% der Aufnahmezeit
-- Lautstärkedynamik: ${m.dynamics ?? '?'} (unter 35 = monoton, über 75 = sehr bewegt)
+- Sprechtempo: ${wpm} Wörter/Minute (${pacingStatus})
+- Sprechpausen über 0,6s: ${pauseCount} (längste: ${longestPauseMs !== '?' ? (longestPauseMs / 1000).toFixed(1) + 's' : '?'})
+- Redeanteil: ${speakingRatio}% der Aufnahmezeit
+- Lautstärkedynamik: ${dynamics} (unter 35 = monoton, über 75 = sehr bewegt)
 
 Transkript: "${safeTranscript}"
 
 ${frames && frames.length > 0 ? "Du erhältst zusätzlich Einzelbilder aus der Webcam des Nutzers während des Sprechens. Beurteile anhand dieser Bilder Körpersprache, Gestik und Blickkontakt (Wirkt die Person offen? Schaut sie in die Kamera?)." : "Keine Videobilder verfügbar."}
 
 Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgenden Schlüsseln zurück:
-"fillers": (Anzahl der Füllwörter im Transkript als Zahl, z.B. "also", "halt", "quasi", "irgendwie"),
-"confidenceScore": (Ein Wert von 0 bis 100 als Zahl, der bewertet, wie souverän, klar und flüssig der Sprecher wirkt. Berücksichtige dabei Tempo, Pausen, Füllwörter, schwache Formulierungen wie "vielleicht" oder "eigentlich" und Ausdrucksweise),
+"fillers": (Anzahl der Füllwörter im Transkript als Zahl, z.B. "also", "halt", "quasi", "irgendwie", min 0),
+"confidenceScore": (Ein Wert von 0 bis 100 als Zahl, der bewertet, wie souverän, klar und flüssig der Sprecher wirkt. Berücksichtige dabei Tempo, Pausen, Füllwörter, schwache Formulierungen wie "vielleicht" oder "eigentlich" und Ausdrucksweise. Oder null wenn nicht bewertbar.),
 "aiTip": {
   "summary": "Kurze inhaltliche Zusammenfassung (1-2 Sätze)",
   "strengths": "Was lief gut? (Inhaltlich oder anhand der Messwerte, 1-2 Sätze)",
@@ -140,13 +259,15 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     const parts = [{ text: promptText }];
     if (frames && Array.isArray(frames)) {
       frames.forEach(imgBase64 => {
-        // Strip data prefix if present
         const data = imgBase64.replace(/^data:image\/\w+;base64,/, "");
         parts.push({
           inlineData: { mimeType: "image/jpeg", data }
         });
       });
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 18000); // 18 seconds timeout
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -155,8 +276,10 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: { responseMimeType: 'application/json' }
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
@@ -172,8 +295,25 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       }
 
       const parsed = JSON.parse(resultText);
+      
+      // Output validation
+      if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) parsed.fillers = 0;
+      if (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100) parsed.confidenceScore = null;
+      if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
+        throw new Error("Invalid AI Tip format");
+      }
+      parsed.aiTip.summary = String(parsed.aiTip.summary || '');
+      parsed.aiTip.strengths = String(parsed.aiTip.strengths || '');
+      parsed.aiTip.improvements = String(parsed.aiTip.improvements || '');
+      parsed.aiTip.actionTip = String(parsed.aiTip.actionTip || '');
+      if (parsed.aiTip.bodyLanguage) parsed.aiTip.bodyLanguage = String(parsed.aiTip.bodyLanguage);
+
       return res.status(200).json(parsed);
     } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+      }
       console.error('AI Error:', e);
       return res.status(500).json({ error: 'Interner Fehler bei der KI-Analyse.' });
     }
@@ -192,14 +332,19 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.' });
     }
 
-    if (!Array.isArray(messages)) return res.status(400).json({ error: 'Messages fehlt.' });
+    if (!Array.isArray(messages) || messages.length > 50) return res.status(400).json({ error: 'Messages ungültig oder zu lang.' });
 
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
-    const contextPrompt = customPrompt ? `Interview-Szenario: "${customPrompt}"` : `Bewerbungsgespräch.`;
+    const profileName = typeof safeProfile.name === 'string' ? safeProfile.name.slice(0, 100) : 'Bewerber';
+    const profileRole = typeof safeProfile.role === 'string' ? safeProfile.role.slice(0, 100) : '';
+    const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
+    const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
+
+    const contextPrompt = customPrompt && typeof customPrompt === 'string' ? `Interview-Szenario: "${customPrompt.slice(0, 1500)}"` : `Bewerbungsgespräch.`;
 
     const systemInstruction = `Du bist ein professioneller, empathischer aber anspruchsvoller Interviewer für folgendes Szenario:
 ${contextPrompt}
-Nutzer-Profil: Name: ${safeProfile.name || 'Bewerber'}, Rolle: ${safeProfile.role || ''}, Alter: ${safeProfile.age || ''}, Hobbys: ${safeProfile.hobbies || ''}.
+Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
 
 Deine Aufgabe: Führe das Gespräch.
 Bei jeder Nachricht des Nutzers analysierst du kurz intern seine Antwort (Struktur, Klarheit, Überzeugungskraft) und generierst dann DEINE NÄCHSTE ANTWORT.
@@ -209,21 +354,40 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
 "feedback": "Ein kurzer (1 Satz) geheimer Tipp an den Nutzer, wie seine letzte Antwort war und was er besser machen kann (wird dem Nutzer als Coach-Tipp angezeigt).",
 "isFinished": boolean (Setze dies auf true, wenn das Interview nach dieser Antwort vorbei ist, sonst false).`;
 
-    const contents = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
+    const contents = [];
+    for (const msg of messages) {
+      if (typeof msg.role !== 'string' || !['user', 'model'].includes(msg.role)) {
+        return res.status(400).json({ error: 'Ungültige Message Role.' });
+      }
+      if (typeof msg.text !== 'string' || msg.text.length > 2000) {
+        return res.status(400).json({ error: 'Ungültiger Message Text.' });
+      }
+      contents.push({
+        role: msg.role,
+        parts: [{ text: msg.text }]
+      });
+    }
+
+    if (frames && (!Array.isArray(frames) || frames.length > 5)) {
+      return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
+    }
 
     // Optionally append images to the latest user message if available
     if (frames && Array.isArray(frames) && frames.length > 0 && contents.length > 0) {
        const lastMsg = contents[contents.length - 1];
        if (lastMsg.role === 'user') {
-         frames.forEach(imgBase64 => {
+         for (const imgBase64 of frames) {
+           if (typeof imgBase64 !== 'string' || !imgBase64.startsWith('data:image/jpeg;base64,')) {
+             return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
+           }
            const data = imgBase64.replace(/^data:image\/\w+;base64,/, "");
            lastMsg.parts.push({ inlineData: { mimeType: "image/jpeg", data } });
-         });
+         }
        }
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 18000);
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -233,8 +397,10 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
           generationConfig: { responseMimeType: 'application/json' }
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
@@ -249,8 +415,18 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
       }
 
       const parsed = JSON.parse(resultText);
+
+      // Validate output
+      if (typeof parsed.interviewerSpeech !== 'string') parsed.interviewerSpeech = '';
+      if (typeof parsed.feedback !== 'string') parsed.feedback = '';
+      if (typeof parsed.isFinished !== 'boolean') parsed.isFinished = false;
+
       return res.status(200).json(parsed);
     } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+      }
       console.error('AI Error (Interview):', e);
       return res.status(500).json({ error: 'Interner Fehler beim Interview.' });
     }

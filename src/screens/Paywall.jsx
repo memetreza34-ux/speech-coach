@@ -52,7 +52,7 @@ export const PaywallScreen = () => {
               "Alle Karriere-Szenarien (Gehalt, Pitch, etc.)",
               "Souveränitätstraining (Politik & Krise)",
               "Fremdsprachen-Simulationen (EN, FR, ES)",
-              "Unbegrenzte KI-Analysen",
+              "Erweiterte KI-Analysen",
               "100% Werbefrei"
             ].map((feature, i) => (
               <li key={i} className="flex items-start gap-3">

@@ -63,11 +63,11 @@ const SessionCard = ({ session, profile }) => {
         <div className="flex items-center gap-3">
           <div className="text-right flex items-center gap-4">
             <div>
-              <div className="font-bold text-emerald-600">{session.confidenceScore === null ? '-' : (session.confidenceScore ?? Math.max(0, Math.min(100, Math.round(100 - ((session.fillers||0) * 2) - (Math.abs((session.wpm || 130) - 130) * 0.5)))))} <span className="text-xs font-normal text-slate-400">Score</span></div>
+              <div className="font-bold text-emerald-600">{session.confidenceScore === null || session.confidenceScore === undefined ? '–' : session.confidenceScore} <span className="text-xs font-normal text-slate-400">Score</span></div>
             </div>
             <div>
-              <div className="font-bold text-indigo-600">{session.wpm} <span className="text-xs font-normal text-slate-400">WPM</span></div>
-              <div className="text-xs text-slate-500">{session.fillers} Füllwörter</div>
+              <div className="font-bold text-indigo-600">{session.wpm ?? '–'} <span className="text-xs font-normal text-slate-400">WPM</span></div>
+              <div className="text-xs text-slate-500">{session.fillers ?? '–'} Füllwörter</div>
             </div>
           </div>
           {expanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
@@ -85,11 +85,11 @@ const SessionCard = ({ session, profile }) => {
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-slate-50 rounded-xl p-3">
                 <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Pausen</div>
-                <div className="font-semibold text-slate-700">{session.pauseCount || 0}</div>
+                <div className="font-semibold text-slate-700">{session.pauseCount ?? '–'}</div>
               </div>
               <div className="bg-slate-50 rounded-xl p-3">
                 <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Status</div>
-                <div className="font-semibold text-slate-700">{session.pacingStatus || 'OK'}</div>
+                <div className="font-semibold text-slate-700">{session.pacingStatus ?? '–'}</div>
               </div>
             </div>
 

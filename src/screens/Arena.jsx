@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 
 export const ArenaScreen = () => {
-  const { profile, updateProfile } = useAuth();
+  const { profile, updateProfile, user } = useAuth();
   const navigate = useNavigate();
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customForm, setCustomForm] = useState({ title: '', prompt: '' });
@@ -26,19 +26,30 @@ export const ArenaScreen = () => {
   const handleCreateCustom = async () => {
     if (!customForm.title || !customForm.prompt) return;
     
-    const newMode = {
-      id: `custom_${Date.now()}`,
-      title: customForm.title,
-      prompt: customForm.prompt,
-      category: 'custom',
-      isPremium: false,
-      color: 'from-fuchsia-500 to-pink-600',
-      icon: 'Zap'
-    };
-
-    await updateProfile({ customModes: [...customModes, newMode] });
-    setShowCustomModal(false);
-    setCustomForm({ title: '', prompt: '' });
+    try {
+      const token = await profile?.getIdToken?.() || await user?.getIdToken();
+      const res = await fetch('/api/custom-modes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(customForm)
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Fehler beim Erstellen des Szenarios.');
+        return;
+      }
+      
+      // Update local context profile
+      await updateProfile({ customModes: [...customModes, data.mode] });
+      setShowCustomModal(false);
+      setCustomForm({ title: '', prompt: '' });
+    } catch (e) {
+      alert('Netzwerkfehler beim Erstellen.');
+    }
   };
 
   return (

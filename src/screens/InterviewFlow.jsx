@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useRecorder } from '../useRecorder';
 import { getPromptForMode, modeTitle, MODES } from '../utils/speech';
 import { auth, db } from '../lib/firebase';
-import { doc, collection, setDoc } from 'firebase/firestore';
+import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function InterviewFlow() {
   const { modeId } = useParams();
@@ -28,8 +28,8 @@ export default function InterviewFlow() {
     totalDurationMs: 0,
     totalPauseCount: 0,
     maxPauseMs: 0,
-    totalSpeakingRatioSum: 0,
-    totalDynamicsSum: 0,
+    weightedSpeakingRatioSum: 0,
+    weightedDynamicsSum: 0,
     turnCount: 0,
     totalWords: 0
   });
@@ -95,16 +95,24 @@ export default function InterviewFlow() {
         
         if (data.isFinished) {
           // Final Evaluation via /api/analyze
-          const finalTranscript = chatHistory.filter(m => m.role === 'user').map(m => m.text).join('\\n');
+          const finalTranscript = chatHistory.filter(m => m.role === 'user').map(m => m.text).join('\n');
           const finalWpm = currentMetrics.totalDurationMs > 0 ? Math.round((currentMetrics.totalWords / (currentMetrics.totalDurationMs / 1000 / 60))) : 0;
-          const tc = Math.max(1, currentMetrics.turnCount);
+          
+          const finalSpeakingRatio = currentMetrics.totalDurationMs > 0 
+            ? Math.round(currentMetrics.weightedSpeakingRatioSum / currentMetrics.totalDurationMs)
+            : 0;
+          
+          const finalDynamics = currentMetrics.totalDurationMs > 0
+            ? Math.round(currentMetrics.weightedDynamicsSum / currentMetrics.totalDurationMs)
+            : 0;
+
           const finalMetrics = {
-             wpm: finalWpm,
-             pauseCount: currentMetrics.totalPauseCount,
-             longestPauseMs: currentMetrics.maxPauseMs,
-             speakingRatio: Math.round(currentMetrics.totalSpeakingRatioSum / tc),
-             dynamics: Math.round(currentMetrics.totalDynamicsSum / tc),
-             durationMs: currentMetrics.totalDurationMs
+             wpm: finalWpm || 0,
+             pauseCount: currentMetrics.totalPauseCount || 0,
+             longestPauseMs: currentMetrics.maxPauseMs || 0,
+             speakingRatio: finalSpeakingRatio || 0,
+             dynamics: finalDynamics || 0,
+             durationMs: currentMetrics.totalDurationMs || 0
           };
 
           let aiFeedback = null;
@@ -132,6 +140,7 @@ export default function InterviewFlow() {
               mode: modeId,
               modeLabel: modeTitle(modeId),
               date: new Date().toISOString(),
+              timestamp: serverTimestamp(),
               sessionType: 'interview',
               fillers: aiFeedback?.fillers ?? null,
               confidenceScore: aiFeedback?.confidenceScore ?? null,
@@ -142,7 +151,7 @@ export default function InterviewFlow() {
               pauseCount: finalMetrics.pauseCount,
               longestPauseMs: finalMetrics.longestPauseMs,
               durationMs: finalMetrics.durationMs,
-              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\\n\\n')
+              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n')
             }).catch(console.error);
           }
           setTimeout(() => navigate('/dashboard'), 5000);
@@ -168,6 +177,7 @@ export default function InterviewFlow() {
       hasStartedRef.current = true;
       startInterview();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const speakText = (text) => {
@@ -185,14 +195,14 @@ export default function InterviewFlow() {
       const recording = await stop();
       
       const userText = recording.transcript || "(Keine hörbare Antwort)";
-      const words = userText.trim().split(/\\s+/).filter(w => w.length > 0).length;
+      const words = userText.trim().split(/\s+/).filter(w => w.length > 0).length;
       
       const updatedMetrics = {
         totalDurationMs: sessionMetrics.totalDurationMs + recording.durationMs,
         totalPauseCount: sessionMetrics.totalPauseCount + recording.pauseCount,
         maxPauseMs: Math.max(sessionMetrics.maxPauseMs, recording.longestPauseMs),
-        totalSpeakingRatioSum: sessionMetrics.totalSpeakingRatioSum + recording.speakingRatio,
-        totalDynamicsSum: sessionMetrics.totalDynamicsSum + recording.dynamics,
+        weightedSpeakingRatioSum: sessionMetrics.weightedSpeakingRatioSum + (recording.speakingRatio * recording.durationMs),
+        weightedDynamicsSum: sessionMetrics.weightedDynamicsSum + (recording.dynamics * recording.durationMs),
         turnCount: sessionMetrics.turnCount + 1,
         totalWords: sessionMetrics.totalWords + words
       };
