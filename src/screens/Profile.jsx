@@ -7,7 +7,7 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { computeLevel, computeStreak } from '../utils/speech';
 
 export const ProfileScreen = () => {
-  const { profile, updateProfile, logout, user } = useAuth();
+  const { profile, updateProfile, logout, deleteAccount, user } = useAuth();
   const [formData, setFormData] = useState({
     name: profile?.name || '',
     role: profile?.role || '',
@@ -185,11 +185,25 @@ export const ProfileScreen = () => {
         <div className="bg-slate-200/50 rounded-2xl p-6 mb-8 text-slate-600">
           <div className="flex items-center gap-3 mb-2 text-slate-700">
             <ShieldAlert size={20} />
-            <h3 className="font-bold text-sm uppercase tracking-wider">Datenschutz</h3>
+            <h3 className="font-bold text-sm uppercase tracking-wider">Datenschutz & Account</h3>
           </div>
-          <p className="text-xs leading-relaxed">
+          <p className="text-xs leading-relaxed mb-4">
             Deine Audiodaten werden zur Transkription genutzt (oftmals serverseitig durch den Browser). Für das Coaching-Feedback werden der erkannte Text, berechnete Metriken, Profilinformationen und (bei aktiver Kamera) Einzelbilder sicher an Google Gemini übertragen.
           </p>
+          <button 
+            onClick={async () => {
+              if (window.confirm("Bist du sicher, dass du deinen Account und alle Daten unwiderruflich löschen möchtest?")) {
+                try {
+                  await deleteAccount();
+                } catch (e) {
+                  alert("Fehler beim Löschen. Bitte melde dich ab und wieder an, um es erneut zu versuchen.");
+                }
+              }
+            }}
+            className="text-xs text-red-600 underline font-medium"
+          >
+            Account endgültig löschen
+          </button>
         </div>
 
         <button onClick={logout} className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-red-600 py-3.5 rounded-xl font-medium transition-colors hover:bg-slate-50">

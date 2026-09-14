@@ -28,13 +28,18 @@ export const LoginScreen = () => {
             onClick={loginWithGoogle}
             className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 shadow-sm text-slate-700 py-4 rounded-xl font-medium hover:bg-slate-50 transition-colors"
           >
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.66 15.63 16.88 16.8 15.72 17.58V20.34H19.28C21.36 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4"/>
+              <path d="M12 23C14.97 23 17.46 22.02 19.28 20.34L15.72 17.58C14.74 18.24 13.48 18.64 12 18.64C9.14 18.64 6.71 16.71 5.84 14.11H2.16V16.96C3.98 20.57 7.7 23 12 23Z" fill="#34A853"/>
+              <path d="M5.84 14.11C5.62 13.45 5.49 12.74 5.49 12C5.49 11.26 5.62 10.55 5.84 9.89V7.04H2.16C1.41 8.53 1 10.21 1 12C1 13.79 1.41 15.47 2.16 16.96L5.84 14.11Z" fill="#FBBC05"/>
+              <path d="M12 5.36C13.62 5.36 15.07 5.92 16.21 7.01L19.35 3.87C17.45 2.11 14.97 1 12 1C7.7 1 3.98 3.43 2.16 7.04L5.84 9.89C6.71 7.29 9.14 5.36 12 5.36Z" fill="#EA4335"/>
+            </svg>
             Mit Google anmelden
           </motion.button>
         </div>
 
         <p className="mt-8 text-xs text-slate-400 text-center max-w-xs">
-          Mit der Anmeldung akzeptierst du unsere AGB und die Datenschutzerklärung.
+          Mit der Anmeldung akzeptierst du unsere <a href="/terms" className="underline hover:text-slate-600">Nutzungsbedingungen</a> und <a href="/privacy" className="underline hover:text-slate-600">Datenschutzerklärung</a>.
         </p>
       </div>
     </div>

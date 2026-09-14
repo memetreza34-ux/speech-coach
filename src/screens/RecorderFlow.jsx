@@ -132,15 +132,17 @@ export const RecorderFlow = () => {
           mode: modeId,
           modeLabel: displayTitle,
           date: new Date().toISOString(),
+          sessionType: 'recording',
           fillers: result.fillers,
           wpm: result.wpm,
           pacingStatus: result.pacingStatus,
           pauseCount: result.pauseCount,
+          longestPauseMs: recording.longestPauseMs,
           dynamics: result.dynamics,
           speakingRatio: result.speakingRatio,
           confidenceScore: result.confidenceScore,
           aiTip: result.aiTip,
-          transcript: recording.transcript, // Now saving transcript!
+          transcript: recording.transcript,
           durationMs: recording.durationMs
         });
       }

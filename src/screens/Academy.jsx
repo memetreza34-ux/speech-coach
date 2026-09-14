@@ -15,11 +15,11 @@ export const AcademyScreen = () => {
       color: "text-indigo-600",
       bgColor: "bg-indigo-100",
       lessons: [
-        { title: "Die 3-Sekunden Pause", duration: "2 Min", type: "read", content: "Die Pause ist das mächtigste Werkzeug in der Rhetorik.\n\nViele Anfänger haben Angst vor Stille und füllen sie mit 'Ähm' oder 'Also'. Eine bewusste Pause von 3 Sekunden nach einem wichtigen Statement gibt dem Publikum Zeit, das Gesagte zu verarbeiten.\n\nTipp für dein nächstes Training: Zähle im Kopf langsam '21, 22, 23', bevor du den nächsten Punkt beginnst. Du wirst sofort souveräner wirken." },
-        { title: "Den Elevator Pitch aufbauen", duration: "4 Min", type: "video", videoId: "-FOCpMAww28", content: "Ein guter Pitch braucht genau drei Dinge:\n\n1. Den Hook: Eine steile These oder eine überraschende Frage, die sofort Aufmerksamkeit weckt.\n2. Den Value: Welches Problem löst du, und warum bist du der Einzige, der das kann?\n3. Den Ask: Was willst du von der Person gegenüber?\n\nWer länger als 60 Sekunden braucht, hat sein Thema oft selbst noch nicht ganz durchdrungen. Versuche es direkt in der Arena unter 'Präsentationen' aus!" },
-        { title: "STAR-Methode für HR-Fragen", duration: "3 Min", type: "read", content: "Situation, Task, Action, Result.\n\nWenn du im Bewerbungsgespräch nach Fehlern oder Konflikten gefragt wirst, antworte immer in dieser Struktur.\n\n- Situation: Was war das Problem?\n- Task: Was war deine Aufgabe?\n- Action: Wie hast du gehandelt?\n- Result: Was war das (positive) Lernergebnis?\n\nSo bleibst du immer professionell und lösungsorientiert." },
+        { title: "Die 3-Sekunden Pause", practiceMode: "/record/impromptu", duration: "2 Min", type: "read", content: "Die Pause ist das mächtigste Werkzeug in der Rhetorik.\n\nViele Anfänger haben Angst vor Stille und füllen sie mit 'Ähm' oder 'Also'. Eine bewusste Pause von 3 Sekunden nach einem wichtigen Statement gibt dem Publikum Zeit, das Gesagte zu verarbeiten.\n\nTipp für dein nächstes Training: Zähle im Kopf langsam '21, 22, 23', bevor du den nächsten Punkt beginnst. Du wirst sofort souveräner wirken." },
+        { title: "Den Elevator Pitch aufbauen", practiceMode: "/record/elevator_pitch", duration: "4 Min", type: "video", videoId: "-FOCpMAww28", content: "Ein guter Pitch braucht genau drei Dinge:\n\n1. Den Hook: Eine steile These oder eine überraschende Frage, die sofort Aufmerksamkeit weckt.\n2. Den Value: Welches Problem löst du, und warum bist du der Einzige, der das kann?\n3. Den Ask: Was willst du von der Person gegenüber?\n\nWer länger als 60 Sekunden braucht, hat sein Thema oft selbst noch nicht ganz durchdrungen. Versuche es direkt in der Arena unter 'Präsentationen' aus!" },
+        { title: "STAR-Methode für HR-Fragen", practiceMode: "/record/interview", duration: "3 Min", type: "read", content: "Situation, Task, Action, Result.\n\nWenn du im Bewerbungsgespräch nach Fehlern oder Konflikten gefragt wirst, antworte immer in dieser Struktur.\n\n- Situation: Was war das Problem?\n- Task: Was war deine Aufgabe?\n- Action: Wie hast du gehandelt?\n- Result: Was war das (positive) Lernergebnis?\n\nSo bleibst du immer professionell und lösungsorientiert." },
         { title: "Pyramiden-Prinzip (Minto)", duration: "5 Min", type: "read", content: "Fange immer mit der Kernbotschaft an! Im B2B-Umfeld haben Manager keine Zeit für lange Vorgeschichten.\n\nErkläre erst das 'Was' (das Ergebnis), dann das 'Wie' (deine Argumente) und erst ganz am Schluss das 'Warum' (die Details).\n\nDrehe deine Sätze einfach mal um. Statt: 'Weil die Kosten steigen, müssen wir X tun' sagst du: 'Wir müssen X tun, weil die Kosten steigen.'" },
-        { title: "Storytelling: Die Heldenreise", duration: "6 Min", type: "video", videoId: "-FOCpMAww28", content: "Jede gute Präsentation erzählt eine Geschichte.\n\nDer größte Fehler im Sales: Das eigene Produkt als Helden darzustellen.\n\nFalsch: Mach den Kunden zum Helden deiner Geschichte. Dein Produkt ist nur das 'magische Schwert', das du ihm reichst, damit er den Drachen (sein Business-Problem) besiegen kann." }
+        { title: "Storytelling: Die Heldenreise", practiceMode: "/record/presentation", duration: "6 Min", type: "video", videoId: "-FOCpMAww28", content: "Jede gute Präsentation erzählt eine Geschichte.\n\nDer größte Fehler im Sales: Das eigene Produkt als Helden darzustellen.\n\nFalsch: Mach den Kunden zum Helden deiner Geschichte. Dein Produkt ist nur das 'magische Schwert', das du ihm reichst, damit er den Drachen (sein Business-Problem) besiegen kann." }
       ]
     },
     {
@@ -31,7 +31,7 @@ export const AcademyScreen = () => {
         { title: "Wohin mit den Händen?", duration: "3 Min", type: "video", videoId: "Ks-_Mh1QhMc", content: "Die Grundregel lautet: Hände immer sichtbar halten, idealerweise locker auf Bauchnabelhöhe. Die 'Merkel-Raute' ist ein bekanntes Extrem, zeigt aber die Kernidee: Eine neutrale Ruheposition.\n\nVermeide zwingend verschränkte Arme (Abwehr) oder Hände in den Hosentaschen (Desinteresse).\n\nNutze deine Hände aktiv, um Dimensionen (groß/klein) oder Zahlenstrukturen (Erstens, Zweitens) zu unterstreichen." },
         { title: "Blickkontakt in Videocalls", duration: "2 Min", type: "read", content: "Der größte Fehler in Zoom oder Teams: Du schaust auf die Gesichter der anderen auf deinem Bildschirm.\n\nSchau stattdessen direkt oben in die Kameralinse! Nur wenn du in die Linse schaust, fühlt sich dein Gegenüber wirklich angesehen. Blende zur Not dein eigenes Videobild aus, um nicht ständig dich selbst zu beobachten." },
         { title: "Bauchatmung gegen Nervosität", duration: "5 Min", type: "read", content: "Atme tief in den Bauch (das Zwerchfell), nicht oben in die Brust.\n\nBrustatmung ist eine Stressreaktion des Körpers und macht deine Stimme dünn und zittrig. Wenn du tief in den Bauch atmest, senkt das deinen Puls sofort und gibt deiner Stimme mehr Volumen, Resonanz und Ruhe." },
-        { title: "Stimmdynamik & Monotonie", duration: "4 Min", type: "video", videoId: "eIho2S0ZahI", content: "Wer monoton spricht, schläfert sein Publikum ein.\n\nDu kannst drei Dinge variieren:\n1. Lautstärke\n2. Sprechtempo\n3. Tonhöhe\n\nWerde ganz leise, um ein 'Geheimnis' zu teilen, und werde etwas lauter und energischer, wenn du deine Kernbotschaft verkündest." }
+        { title: "Lautstärkedynamik & Monotonie", practiceMode: "/record/impromptu", duration: "4 Min", type: "video", videoId: "eIho2S0ZahI", content: "Wer monoton spricht, schläfert sein Publikum ein.\n\nDu kannst drei Dinge variieren:\n1. Lautstärke\n2. Sprechtempo\n3. Tonhöhe\n\nWerde ganz leise, um ein 'Geheimnis' zu teilen, und werde etwas lauter und energischer, wenn du deine Kernbotschaft verkündest." }
       ]
     },
     {
@@ -40,8 +40,8 @@ export const AcademyScreen = () => {
       color: "text-rose-600",
       bgColor: "bg-rose-100",
       lessons: [
-        { title: "Einwände als Chancen nutzen", duration: "4 Min", type: "video", videoId: "eIho2S0ZahI", content: "Ein Kunde sagt 'Zu teuer'. Panik?\n\nNein! 'Zu teuer' bedeutet fast immer nur: 'Ich sehe den Wert für mich noch nicht ganz'.\n\nGehe nicht in die Defensive. Frage stattdessen nach: 'Verstehe ich absolut. Ist es das generelle Budget, oder sind Sie sich noch unsicher, wann sich die Lösung für Sie rechnet?'" },
-        { title: "Nie die erste Zahl nennen?", duration: "3 Min", type: "read", content: "Sollte man in Gehaltsverhandlungen abwarten?\n\nDie Wissenschaft sagt oft das Gegenteil: Wer die erste Zahl nennt, setzt den 'Anker'. Das Gehirn des Gegenübers orientiert sich unterbewusst immer an dieser ersten Zahl.\n\nEs kann also sehr vorteilhaft sein, selbstbewusst zuerst eine etwas höhere, aber realistische Zahl in den Raum zu stellen." }
+        { title: "Einwände als Chancen nutzen", practiceMode: "/interview/sales_objection", duration: "4 Min", type: "video", videoId: "eIho2S0ZahI", content: "Ein Kunde sagt 'Zu teuer'. Panik?\n\nNein! 'Zu teuer' bedeutet fast immer nur: 'Ich sehe den Wert für mich noch nicht ganz'.\n\nGehe nicht in die Defensive. Frage stattdessen nach: 'Verstehe ich absolut. Ist es das generelle Budget, oder sind Sie sich noch unsicher, wann sich die Lösung für Sie rechnet?'" },
+        { title: "Nie die erste Zahl nennen?", practiceMode: "/record/negotiation", duration: "3 Min", type: "read", content: "Sollte man in Gehaltsverhandlungen abwarten?\n\nVerhandlungs-Experten sagen oft das Gegenteil: Wer die erste Zahl nennt, setzt den 'Anker'. Das Gehirn des Gegenübers orientiert sich unterbewusst immer an dieser ersten Zahl.\n\nEs kann also sehr vorteilhaft sein, selbstbewusst zuerst eine etwas höhere, aber realistische Zahl in den Raum zu stellen." }
       ]
     },
     {
@@ -50,8 +50,8 @@ export const AcademyScreen = () => {
       color: "text-amber-600",
       bgColor: "bg-amber-100",
       lessons: [
-        { title: "Das Imposter-Syndrom besiegen", duration: "4 Min", type: "read", content: "'Ich gehöre hier nicht hin. Die merken bald, dass ich keine Ahnung habe.'\n\nFast 70% der Top-Manager kennen diesen Gedanken. Akzeptiere, dass Aufregung einfach nur bedeutet, dass dir die Sache wichtig ist. Niemand erwartet Perfektion von dir – sie erwarten Leidenschaft für dein Thema." },
-        { title: "Blackout! Was nun?", duration: "3 Min", type: "video", videoId: "Ks-_Mh1QhMc", content: "Ein Blackout passiert den Besten. Was hilft?\n\nTrick 1: Trink langsam einen Schluck Wasser. Das kauft dir 5 Sekunden Zeit.\nTrick 2: Sprich es offen an! 'Jetzt habe ich glatt den Faden verloren – wo war ich gerade stehen geblieben?' Das macht extrem sympathisch, weil es menschlich ist." }
+        { title: "Das Imposter-Syndrom besiegen", duration: "4 Min", type: "read", content: "'Ich gehöre hier nicht hin. Die merken bald, dass ich keine Ahnung habe.'\n\nViele sehr erfolgreiche Menschen kennen diesen Gedanken. Akzeptiere, dass Aufregung einfach nur bedeutet, dass dir die Sache wichtig ist. Niemand erwartet Perfektion von dir – sie erwarten Leidenschaft für dein Thema." },
+        { title: "Blackout! Was nun?", practiceMode: "/record/toastmasters", duration: "3 Min", type: "video", videoId: "Ks-_Mh1QhMc", content: "Ein Blackout passiert den Besten. Was hilft?\n\nTrick 1: Trink langsam einen Schluck Wasser. Das kauft dir 5 Sekunden Zeit.\nTrick 2: Sprich es offen an! 'Jetzt habe ich glatt den Faden verloren – wo war ich gerade stehen geblieben?' Das macht extrem sympathisch, weil es menschlich ist." }
       ]
     }
   ];
@@ -229,12 +229,13 @@ export const AcademyScreen = () => {
                 <p className="text-sm text-slate-600 mb-6 max-w-sm mx-auto">Wende das Gelernte direkt in der Trainings-Arena an und hol dir das Feedback der KI.</p>
                 <button 
                   onClick={() => {
+                    const route = selectedLesson.practiceMode || '/arena';
                     setSelectedLesson(null);
-                    navigate('/arena');
+                    navigate(route);
                   }}
                   className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-indigo-200 hover:scale-[1.02] transition-transform w-full sm:w-auto"
                 >
-                  Zur Arena wechseln
+                  {selectedLesson.practiceMode ? 'Jetzt üben' : 'Zur Arena wechseln'}
                 </button>
               </div>
             </div>

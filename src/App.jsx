@@ -15,6 +15,8 @@ import { OnboardingScreen } from './screens/Onboarding';
 import { RecorderFlow } from './screens/RecorderFlow';
 import InterviewFlow from './screens/InterviewFlow';
 
+import { PrivacyScreen, ImprintScreen, TermsScreen } from './screens/Legal';
+
 const BottomNav = () => {
   const location = useLocation();
   const tabs = [
@@ -26,7 +28,7 @@ const BottomNav = () => {
   ];
 
   // Hide nav on specific screens
-  if (['/', '/paywall', '/onboarding'].includes(location.pathname) || location.pathname.startsWith('/record') || location.pathname.startsWith('/interview')) {
+  if (['/', '/paywall', '/onboarding', '/privacy', '/imprint', '/terms'].includes(location.pathname) || location.pathname.startsWith('/record') || location.pathname.startsWith('/interview')) {
     return null;
   }
 
@@ -70,6 +72,9 @@ const AppRoutes = () => {
           <Route path="/paywall" element={<ProtectedRoute><PaywallScreen /></ProtectedRoute>} />
           <Route path="/record/:modeId" element={<ProtectedRoute><RecorderFlow /></ProtectedRoute>} />
           <Route path="/interview/:modeId" element={<ProtectedRoute><InterviewFlow /></ProtectedRoute>} />
+          <Route path="/privacy" element={<PrivacyScreen />} />
+          <Route path="/imprint" element={<ImprintScreen />} />
+          <Route path="/terms" element={<TermsScreen />} />
         </Routes>
       </AnimatePresence>
       <BottomNav />

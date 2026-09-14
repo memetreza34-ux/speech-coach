@@ -24,6 +24,15 @@ export default function InterviewFlow() {
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [sessionMetrics, setSessionMetrics] = useState({
+    totalDurationMs: 0,
+    totalPauseCount: 0,
+    maxPauseMs: 0,
+    totalSpeakingRatioSum: 0,
+    totalDynamicsSum: 0,
+    turnCount: 0,
+    totalWords: 0
+  });
   
   const [useVideo, setUseVideo] = useState(false);
   const videoRef = useRef(null);
@@ -59,7 +68,7 @@ export default function InterviewFlow() {
     return () => clearInterval(frameIntervalRef.current);
   }, [isRecording, useVideo, stream, frames.length]);
 
-  const sendTurn = async (chatHistory) => {
+  const sendTurn = async (chatHistory, currentMetrics = sessionMetrics) => {
     setIsProcessing(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -85,6 +94,37 @@ export default function InterviewFlow() {
         speakText(data.interviewerSpeech);
         
         if (data.isFinished) {
+          // Final Evaluation via /api/analyze
+          const finalTranscript = chatHistory.filter(m => m.role === 'user').map(m => m.text).join('\\n');
+          const finalWpm = currentMetrics.totalDurationMs > 0 ? Math.round((currentMetrics.totalWords / (currentMetrics.totalDurationMs / 1000 / 60))) : 0;
+          const tc = Math.max(1, currentMetrics.turnCount);
+          const finalMetrics = {
+             wpm: finalWpm,
+             pauseCount: currentMetrics.totalPauseCount,
+             longestPauseMs: currentMetrics.maxPauseMs,
+             speakingRatio: Math.round(currentMetrics.totalSpeakingRatioSum / tc),
+             dynamics: Math.round(currentMetrics.totalDynamicsSum / tc),
+             durationMs: currentMetrics.totalDurationMs
+          };
+
+          let aiFeedback = null;
+          try {
+             const analyzeRes = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  mode: modeId,
+                  transcript: finalTranscript || "Keine Antwort gegeben.",
+                  metrics: finalMetrics,
+                  profile,
+                  customPrompt: "Bewerte das Live-Interview abschließend und gib einen Gesamt-Score."
+                })
+             });
+             if (analyzeRes.ok) aiFeedback = await analyzeRes.json();
+          } catch(e) {
+             console.error("Evaluation error", e);
+          }
+          
           // Save session
           if (auth.currentUser) {
             const sessionRef = doc(collection(db, 'users', auth.currentUser.uid, 'sessions'));
@@ -92,13 +132,17 @@ export default function InterviewFlow() {
               mode: modeId,
               modeLabel: modeTitle(modeId),
               date: new Date().toISOString(),
-              fillers: null,
-              wpm: null,
-              confidenceScore: null,
-              dynamics: null,
-              speakingRatio: null,
-              durationMs: null,
-              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n')
+              sessionType: 'interview',
+              fillers: aiFeedback?.fillers ?? null,
+              confidenceScore: aiFeedback?.confidenceScore ?? null,
+              aiTip: aiFeedback?.aiTip ?? null,
+              wpm: finalMetrics.wpm,
+              dynamics: finalMetrics.dynamics,
+              speakingRatio: finalMetrics.speakingRatio,
+              pauseCount: finalMetrics.pauseCount,
+              longestPauseMs: finalMetrics.longestPauseMs,
+              durationMs: finalMetrics.durationMs,
+              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\\n\\n')
             }).catch(console.error);
           }
           setTimeout(() => navigate('/dashboard'), 5000);
@@ -139,11 +183,24 @@ export default function InterviewFlow() {
   const handleToggleRecording = async () => {
     if (isRecording) {
       const recording = await stop();
-      // User finished speaking, add user message and send to API
-      const userText = recording.transcript || "(Unverständliche Antwort)";
+      
+      const userText = recording.transcript || "(Keine hörbare Antwort)";
+      const words = userText.trim().split(/\\s+/).filter(w => w.length > 0).length;
+      
+      const updatedMetrics = {
+        totalDurationMs: sessionMetrics.totalDurationMs + recording.durationMs,
+        totalPauseCount: sessionMetrics.totalPauseCount + recording.pauseCount,
+        maxPauseMs: Math.max(sessionMetrics.maxPauseMs, recording.longestPauseMs),
+        totalSpeakingRatioSum: sessionMetrics.totalSpeakingRatioSum + recording.speakingRatio,
+        totalDynamicsSum: sessionMetrics.totalDynamicsSum + recording.dynamics,
+        turnCount: sessionMetrics.turnCount + 1,
+        totalWords: sessionMetrics.totalWords + words
+      };
+      setSessionMetrics(updatedMetrics);
+
       const newHistory = [...messages, { role: 'user', text: userText }];
       setMessages(newHistory);
-      await sendTurn(newHistory);
+      await sendTurn(newHistory, updatedMetrics);
     } else {
       setFrames([]);
       await start();

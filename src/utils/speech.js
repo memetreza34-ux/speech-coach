@@ -80,9 +80,10 @@ export const modeTitle = (id) => {
 export const PROMPTS = {
   elevator_pitch: "Ein CEO steht mit dir im Aufzug. Pitche ihm dich oder deine Idee in exakt 60 Sekunden.",
   toastmasters: "Zieh ein fiktives Thema aus dem Hut und halte eine mitreißende 2-Minuten-Rede.",
-  sales_objection: "Einwände überwinden: Du verkaufst eine teure B2B-Software, und der Kunde zweifelt.",
+  sales_objection: "Du führst ein interaktives Verkaufsgespräch. Der Kunde zweifelt am Preis, am Nutzen und am Aufwand der Einführung. Reagiere dynamisch auf die Argumente, bleibe nutzenorientiert und versuche den Abschluss.",
   impromptu: "Rede 60 Sekunden über: „Warum das Internet Fluch und Segen zugleich ist.“",
   interview: "HR-Manager: „Erzählen Sie mir von einem großen Fehler in Ihrer Karriere.“",
+  interview_interactive: "Du führst ein realistisches Bewerbungsgespräch. Stelle dich kurz als HR-Manager vor, stelle nacheinander Fragen zu Motivation, Erfahrung, Stärken, Schwächen, Konflikten und konkreten STAR-Situationen. Stelle immer nur EINE Frage gleichzeitig und reagiere authentisch auf die Antworten.",
   dating: "Dein Date: „Ich liebe Abenteuer. Was war das Verrückteste, das du je gemacht hast?“",
   negotiation: "Chef: „Das Budget ist eng. Warum sollten wir Ihnen 15 % mehr zahlen?“",
   pitch: "Investor: „Es gibt Dutzende ähnliche Apps. Warum wird genau Ihre erfolgreich?“",

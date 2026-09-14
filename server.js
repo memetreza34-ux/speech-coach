@@ -71,6 +71,9 @@ async function startServer() {
 
   // API Route for Upgrade (Simulated Stripe Webhook / Entitlement)
   app.post('/api/upgrade', async (req, res) => {
+    if (process.env.ALLOW_DEMO_PREMIUM !== 'true') {
+      return res.status(403).json({ error: 'Demo-Premium ist deaktiviert.' });
+    }
     try {
       const uid = req.user.uid;
       await db.collection('users').doc(uid).update({
@@ -116,7 +119,7 @@ Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst si
 - Sprechtempo: ${m.wpm ?? '?'} Wörter/Minute (${m.pacingStatus ?? '?'})
 - Sprechpausen über 0,6s: ${m.pauseCount ?? '?'} (längste: ${m.longestPauseMs ? (m.longestPauseMs / 1000).toFixed(1) + 's' : '?'})
 - Redeanteil: ${m.speakingRatio ?? '?'}% der Aufnahmezeit
-- Stimmdynamik: ${m.dynamics ?? '?'} (unter 35 = monoton, über 75 = sehr bewegt)
+- Lautstärkedynamik: ${m.dynamics ?? '?'} (unter 35 = monoton, über 75 = sehr bewegt)
 
 Transkript: "${safeTranscript}"
 
@@ -183,9 +186,10 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
     const { mode, messages, profile, customPrompt, frames } = req.body || {};
     
-    // Server-side Premium Check
-    if (!(await verifyPremiumMode(req, res, mode))) {
-      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
+    // Server-side Premium Check (Always required for Live Interviews)
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists || userDoc.data().isPremium !== true) {
+      return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.' });
     }
 
     if (!Array.isArray(messages)) return res.status(400).json({ error: 'Messages fehlt.' });

@@ -23,11 +23,12 @@ export const PaywallScreen = () => {
         // Force reload to get updated profile from Firestore
         window.location.href = '/arena';
       } else {
-        alert('Upgrade fehlgeschlagen.');
+        const data = await res.json();
+        alert(`Upgrade fehlgeschlagen: ${data.error || 'Unbekannter Fehler'}\n\nHinweis: Setze ALLOW_DEMO_PREMIUM=true in deinen Umgebungsvariablen für diesen Prototyp.`);
       }
     } catch (e) {
       console.error(e);
-      alert('Upgrade fehlgeschlagen.');
+      alert('Upgrade fehlgeschlagen. Netzwerkfehler.');
     } finally {
       setLoading(false);
     }

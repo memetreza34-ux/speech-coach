@@ -189,7 +189,16 @@ export const AnalyticsScreen = () => {
 
   const sessionsWithWpm = history.filter(s => typeof s.wpm === 'number');
   const avgWpm = sessionsWithWpm.length ? Math.round(sessionsWithWpm.reduce((acc, curr) => acc + curr.wpm, 0) / sessionsWithWpm.length) : 0;
-  const totalFillers = history.reduce((acc, curr) => acc + (typeof curr.fillers === 'number' ? curr.fillers : 0), 0);
+  
+  let totalWords = 0;
+  let totalFillersSum = 0;
+  history.forEach(s => {
+      if (s.transcript) {
+          totalWords += s.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
+          totalFillersSum += (typeof s.fillers === 'number' ? s.fillers : 0);
+      }
+  });
+  const fillersPer100Words = totalWords > 0 ? (totalFillersSum / totalWords * 100).toFixed(1) : "0.0";
 
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10 pb-28 overflow-y-auto" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
@@ -268,8 +277,8 @@ export const AnalyticsScreen = () => {
                   <Hash size={16} className="text-rose-500" />
                   <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Füllwörter</div>
                 </div>
-                <div className="text-3xl font-serif text-slate-900 mb-1">{totalFillers}</div>
-                <div className="text-xs text-slate-500">Insgesamt</div>
+                <div className="text-3xl font-serif text-slate-900 mb-1">{fillersPer100Words}</div>
+                <div className="text-xs text-slate-500">pro 100 Wörter</div>
               </div>
             </div>
 

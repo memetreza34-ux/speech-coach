@@ -50,7 +50,13 @@ export const ArenaScreen = () => {
             <h1 className="text-3xl font-serif text-slate-900">Die <span className="text-indigo-600 italic">Arena</span></h1>
           </div>
           <button 
-            onClick={() => setShowCustomModal(true)}
+            onClick={() => {
+              if (!profile?.isPremium && customModes.length >= 1) {
+                navigate('/paywall');
+                return;
+              }
+              setShowCustomModal(true);
+            }}
             className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
           >
             <Icons.Plus size={16} /> Eigener Modus
