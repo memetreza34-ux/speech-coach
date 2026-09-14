@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import { modeTitle } from '../utils/speech';
+import { modeTitle, getSessionDate } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
 import { Brain, Activity, Clock, Hash, ChevronDown, ChevronUp, FileText, Loader2, Sparkles, TrendingUp, AlertTriangle, Target } from 'lucide-react';
@@ -48,7 +48,7 @@ const SessionCard = ({ session, profile }) => {
     return modeTitle(id);
   };
 
-  const date = new Date(session.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+  const date = getSessionDate(session).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-3">

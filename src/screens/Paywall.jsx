@@ -2,10 +2,12 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 
 export const PaywallScreen = () => {
   const { profile, user } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = React.useState(false);
 
@@ -24,11 +26,11 @@ export const PaywallScreen = () => {
         window.location.href = '/arena';
       } else {
         const data = await res.json();
-        alert(`Upgrade fehlgeschlagen: ${data.error || 'Unbekannter Fehler'}\n\nHinweis: Setze ALLOW_DEMO_PREMIUM=true in deinen Umgebungsvariablen für diesen Prototyp.`);
+        addToast(`Upgrade fehlgeschlagen: ${data.error || 'Unbekannter Fehler'}. Hinweis: Setze ALLOW_DEMO_PREMIUM=true in deinen Umgebungsvariablen.`, 'error');
       }
     } catch (e) {
       console.error(e);
-      alert('Upgrade fehlgeschlagen. Netzwerkfehler.');
+      addToast('Upgrade fehlgeschlagen. Netzwerkfehler.', 'error');
     } finally {
       setLoading(false);
     }

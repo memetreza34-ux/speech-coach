@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(null);
         setProfile(null);
+        setAuthError(null);
         setLoading(false);
       }
     });
@@ -75,6 +76,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await signOut(auth);
+      setAuthError(null);
     } catch (error) {
       console.error("Logout Error:", error);
     }
@@ -93,6 +95,8 @@ export const AuthProvider = ({ children }) => {
       if (!res.ok) {
         throw new Error("Failed to delete account server-side");
       }
+      await signOut(auth);
+      setAuthError(null);
       setUser(null);
       setProfile(null);
     } catch (error) {
@@ -132,8 +136,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const setLocalProfile = (updates) => {
+    setProfile(prev => prev ? { ...prev, ...updates } : null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, authError, retryProfileLoad, loginWithGoogle, logout, deleteAccount, deleteTrainingData, updateProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, authError, retryProfileLoad, loginWithGoogle, logout, deleteAccount, deleteTrainingData, updateProfile, setLocalProfile }}>
       {!loading && !authError && children}
       {authError && (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">

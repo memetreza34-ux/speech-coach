@@ -3,9 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { MODES as PREMIUM_MODES_CONFIG } from './src/shared/modes.js';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -48,11 +49,7 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  const PREMIUM_MODES = [
-    'interview_interactive', 'sales_objection', 'presentation', 'pitch', 
-    'negotiation', 'resignation', 'conflict', 'wedding', 'apology', 
-    'vision', 'excuses', 'crisis', 'panel', 'lang_fr', 'lang_es'
-  ];
+  const PREMIUM_MODES = PREMIUM_MODES_CONFIG.filter(m => m.isPremium).map(m => m.id);
 
   const verifyPremiumMode = async (req, res, mode) => {
     if (mode && PREMIUM_MODES.includes(mode)) {
@@ -64,30 +61,71 @@ async function startServer() {
     return true;
   };
 
+  const checkQuota = async (uid, isPremium, type) => {
+    const today = new Date().toISOString().split('T')[0];
+    const docSnap = await db.collection('usage').doc(`${uid}_${today}`).get();
+    const usage = docSnap.exists ? docSnap.data() : { [type]: 0 };
+    
+    const limits = {
+      analyze: isPremium ? parseInt(process.env.PRO_DAILY_ANALYSES || 50) : parseInt(process.env.FREE_DAILY_ANALYSES || 5),
+    };
+    
+    return (usage[type] || 0) < (limits[type] || Infinity);
+  };
+
+  const incrementQuota = async (uid, type) => {
+    const today = new Date().toISOString().split('T')[0];
+    await db.collection('usage').doc(`${uid}_${today}`).set(
+      { [type]: FieldValue.increment(1) }, 
+      { merge: true }
+    );
+  };
+
   app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
+  
+  // Release Health Endpoint
+  app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
   app.use('/api/', apiLimiter);
   app.use('/api/', requireAuth);
+
+  // Helper to delete collections in batches
+  async function deleteCollectionInBatches(collectionRef, batchSize = 400) {
+    let snapshot = await collectionRef.limit(batchSize).get();
+    while (snapshot.size > 0) {
+      const batch = db.batch();
+      snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      snapshot = await collectionRef.limit(batchSize).get();
+    }
+  }
 
   // API Route for Account Deletion
   app.delete('/api/account', async (req, res) => {
     try {
       const uid = req.user.uid;
 
-      // Delete all sessions in a batch
+      // Delete all sessions in batches
       const sessionsRef = db.collection('users').doc(uid).collection('sessions');
-      const sessionsSnapshot = await sessionsRef.get();
-      
-      const batch = db.batch();
-      sessionsSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      await deleteCollectionInBatches(sessionsRef);
 
       // Delete user document
-      await db.collection('users').doc(uid).delete();
+      try {
+        await db.collection('users').doc(uid).delete();
+      } catch (e) {
+        console.warn('User document already deleted or failed:', e);
+      }
 
       // Delete Firebase Auth user
-      await getAuth().deleteUser(uid);
+      try {
+        await getAuth().deleteUser(uid);
+      } catch (e) {
+        if (e.code !== 'auth/user-not-found') {
+          console.warn('Auth user deletion failed:', e);
+        }
+      }
 
       return res.status(200).json({ success: true });
     } catch (e) {
@@ -101,13 +139,7 @@ async function startServer() {
     try {
       const uid = req.user.uid;
       const sessionsRef = db.collection('users').doc(uid).collection('sessions');
-      const sessionsSnapshot = await sessionsRef.get();
-      
-      const batch = db.batch();
-      sessionsSnapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      await deleteCollectionInBatches(sessionsRef);
       
       return res.status(200).json({ success: true });
     } catch (e) {
@@ -140,8 +172,10 @@ async function startServer() {
       const customModes = data.customModes || [];
       const isPremium = data.isPremium === true;
       
-      if (!isPremium && customModes.length >= 1) {
-        return res.status(403).json({ error: 'Free-Nutzer können maximal 1 eigenes Szenario erstellen.' });
+      const maxModes = isPremium ? parseInt(process.env.PRO_CUSTOM_MODES || 20) : parseInt(process.env.FREE_CUSTOM_MODES || 1);
+      
+      if (customModes.length >= maxModes) {
+        return res.status(403).json({ error: `Limit für eigene Szenarien (${maxModes}) erreicht.` });
       }
       
       const newMode = {
@@ -196,18 +230,36 @@ async function startServer() {
       return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
     }
 
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    if (!(await checkQuota(req.user.uid, isPremium, 'analyze'))) {
+      return res.status(429).json({ error: 'Tägliches Limit für KI-Analysen erreicht.' });
+    }
+
     if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
     
+    if (customPrompt !== undefined && typeof customPrompt !== 'string') {
+      return res.status(400).json({ error: 'Ungültiges Format für customPrompt.' });
+    }
+
     if (frames && (!Array.isArray(frames) || frames.length > 5)) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
     }
     if (frames) {
+      let totalSize = 0;
       for (const frame of frames) {
         if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) {
            return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
         }
+        totalSize += frame.length;
+        if (frame.length > 500000) { // Limit individual frame base64 length to ~500KB
+           return res.status(400).json({ error: 'Frame zu groß.' });
+        }
+      }
+      if (totalSize > 2000000) {
+        return res.status(400).json({ error: 'Gesamtgröße der Frames überschreitet das Limit.' });
       }
     }
 
@@ -220,15 +272,22 @@ async function startServer() {
     const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
 
     const m = metrics && typeof metrics === 'object' ? metrics : {};
-    // Validate metrics fields
-    const wpm = typeof m.wpm === 'number' ? m.wpm : '?';
-    const pauseCount = typeof m.pauseCount === 'number' ? m.pauseCount : '?';
-    const longestPauseMs = typeof m.longestPauseMs === 'number' ? m.longestPauseMs : '?';
-    const speakingRatio = typeof m.speakingRatio === 'number' ? m.speakingRatio : '?';
-    const dynamics = typeof m.dynamics === 'number' ? m.dynamics : '?';
-    const pacingStatus = typeof m.pacingStatus === 'string' ? m.pacingStatus : '?';
     
-    const contextPrompt = customPrompt ? `Das Szenario ist: "${customPrompt.slice(0, 1500)}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
+    if (m.wpm !== undefined && (typeof m.wpm !== 'number' || m.wpm < 0 || m.wpm > 400)) return res.status(400).json({ error: 'Ungültiger WPM-Wert.' });
+    if (m.pauseCount !== undefined && (typeof m.pauseCount !== 'number' || m.pauseCount < 0)) return res.status(400).json({ error: 'Ungültiger pauseCount-Wert.' });
+    if (m.longestPauseMs !== undefined && (typeof m.longestPauseMs !== 'number' || m.longestPauseMs < 0 || (m.durationMs && m.longestPauseMs > m.durationMs))) return res.status(400).json({ error: 'Ungültiger longestPauseMs-Wert.' });
+    if (m.speakingRatio !== undefined && (typeof m.speakingRatio !== 'number' || m.speakingRatio < 0 || m.speakingRatio > 100)) return res.status(400).json({ error: 'Ungültiger speakingRatio-Wert.' });
+    if (m.dynamics !== undefined && (typeof m.dynamics !== 'number' || m.dynamics < 0 || m.dynamics > 500)) return res.status(400).json({ error: 'Ungültiger dynamics-Wert.' });
+    if (m.durationMs !== undefined && (typeof m.durationMs !== 'number' || m.durationMs < 0 || m.durationMs > 3600000)) return res.status(400).json({ error: 'Ungültiger durationMs-Wert.' });
+
+    const wpm = m.wpm ?? '?';
+    const pauseCount = m.pauseCount ?? '?';
+    const longestPauseMs = m.longestPauseMs ?? '?';
+    const speakingRatio = m.speakingRatio ?? '?';
+    const dynamics = m.dynamics ?? '?';
+    const pacingStatus = typeof m.pacingStatus === 'string' ? m.pacingStatus.slice(0, 20) : '?';
+    
+    const contextPrompt = typeof customPrompt === 'string' ? `Das Szenario ist: "${customPrompt.slice(0, 1500)}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
 
     const promptText = `Du bist ein professioneller Kommunikationstrainer. Analysiere den folgenden Sprech-Versuch eines Nutzers.
 Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
@@ -275,7 +334,28 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { responseMimeType: 'application/json' }
+          generationConfig: { 
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                fillers: { type: 'INTEGER', description: 'Anzahl der erkannten Füllwörter' },
+                confidenceScore: { type: 'INTEGER', description: 'Bewertung von 0 bis 100, oder null', nullable: true },
+                aiTip: {
+                  type: 'OBJECT',
+                  properties: {
+                    summary: { type: 'STRING' },
+                    strengths: { type: 'STRING' },
+                    improvements: { type: 'STRING' },
+                    actionTip: { type: 'STRING' },
+                    bodyLanguage: { type: 'STRING', nullable: true }
+                  },
+                  required: ['summary', 'strengths', 'improvements', 'actionTip']
+                }
+              },
+              required: ['fillers', 'aiTip']
+            }
+          }
         }),
         signal: controller.signal
       });
@@ -296,18 +376,25 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
       const parsed = JSON.parse(resultText);
       
-      // Output validation
-      if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) parsed.fillers = 0;
-      if (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100) parsed.confidenceScore = null;
-      if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
-        throw new Error("Invalid AI Tip format");
+      // Strict Output Validation
+      if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'fillers missing or invalid' });
       }
-      parsed.aiTip.summary = String(parsed.aiTip.summary || '');
-      parsed.aiTip.strengths = String(parsed.aiTip.strengths || '');
-      parsed.aiTip.improvements = String(parsed.aiTip.improvements || '');
-      parsed.aiTip.actionTip = String(parsed.aiTip.actionTip || '');
-      if (parsed.aiTip.bodyLanguage) parsed.aiTip.bodyLanguage = String(parsed.aiTip.bodyLanguage);
+      if (parsed.confidenceScore !== null && (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100)) {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'confidenceScore invalid' });
+      }
+      if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'aiTip missing or invalid' });
+      }
+      if (typeof parsed.aiTip.summary !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'summary missing' });
+      if (typeof parsed.aiTip.strengths !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
+      if (typeof parsed.aiTip.improvements !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
+      if (typeof parsed.aiTip.actionTip !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
+      if (parsed.aiTip.bodyLanguage !== null && parsed.aiTip.bodyLanguage !== undefined && typeof parsed.aiTip.bodyLanguage !== 'string') {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
+      }
 
+      await incrementQuota(req.user.uid, 'analyze');
       return res.status(200).json(parsed);
     } catch (e) {
       clearTimeout(timeout);
@@ -376,12 +463,20 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
     if (frames && Array.isArray(frames) && frames.length > 0 && contents.length > 0) {
        const lastMsg = contents[contents.length - 1];
        if (lastMsg.role === 'user') {
+         let totalSize = 0;
          for (const imgBase64 of frames) {
            if (typeof imgBase64 !== 'string' || !imgBase64.startsWith('data:image/jpeg;base64,')) {
              return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
            }
+           totalSize += imgBase64.length;
+           if (imgBase64.length > 500000) {
+             return res.status(400).json({ error: 'Frame zu groß.' });
+           }
            const data = imgBase64.replace(/^data:image\/\w+;base64,/, "");
            lastMsg.parts.push({ inlineData: { mimeType: "image/jpeg", data } });
+         }
+         if (totalSize > 2000000) {
+           return res.status(400).json({ error: 'Gesamtgröße der Frames überschreitet das Limit.' });
          }
        }
     }
@@ -396,7 +491,18 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
-          generationConfig: { responseMimeType: 'application/json' }
+          generationConfig: { 
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                interviewerSpeech: { type: 'STRING' },
+                feedback: { type: 'STRING' },
+                isFinished: { type: 'BOOLEAN' }
+              },
+              required: ['interviewerSpeech', 'feedback', 'isFinished']
+            }
+          }
         }),
         signal: controller.signal
       });
@@ -417,9 +523,15 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
       const parsed = JSON.parse(resultText);
 
       // Validate output
-      if (typeof parsed.interviewerSpeech !== 'string') parsed.interviewerSpeech = '';
-      if (typeof parsed.feedback !== 'string') parsed.feedback = '';
-      if (typeof parsed.isFinished !== 'boolean') parsed.isFinished = false;
+      if (typeof parsed.interviewerSpeech !== 'string' || !parsed.interviewerSpeech.trim()) {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'interviewerSpeech missing' });
+      }
+      if (typeof parsed.feedback !== 'string') {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'feedback missing' });
+      }
+      if (typeof parsed.isFinished !== 'boolean') {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'isFinished missing' });
+      }
 
       return res.status(200).json(parsed);
     } catch (e) {

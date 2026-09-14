@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CATEGORIES, MODES } from '../utils/speech';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 
 export const ArenaScreen = () => {
-  const { profile, updateProfile, user } = useAuth();
+  const { profile, setLocalProfile, user } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customForm, setCustomForm] = useState({ title: '', prompt: '' });
@@ -39,16 +41,17 @@ export const ArenaScreen = () => {
       
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Fehler beim Erstellen des Szenarios.');
+        addToast(data.error || 'Fehler beim Erstellen des Szenarios.', 'error');
         return;
       }
       
       // Update local context profile
-      await updateProfile({ customModes: [...customModes, data.mode] });
+      setLocalProfile({ customModes: [...customModes, data.mode] });
+      addToast('Eigenes Szenario erfolgreich erstellt!', 'success');
       setShowCustomModal(false);
       setCustomForm({ title: '', prompt: '' });
     } catch (e) {
-      alert('Netzwerkfehler beim Erstellen.');
+      addToast('Netzwerkfehler beim Erstellen.', 'error');
     }
   };
 

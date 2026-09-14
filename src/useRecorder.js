@@ -58,6 +58,7 @@ export const getDynamicsLabel = (dynamics) => {
 
 export function useRecorder(lang, withVideo = false) {
   const [isRecording, setIsRecording] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [level, setLevel] = useState(0);
   const [error, setError] = useState(null);
@@ -119,6 +120,7 @@ export function useRecorder(lang, withVideo = false) {
     const buffer = new Uint8Array(analyser.fftSize);
     
     // Adaptive Noise Floor Calibration (ca. 300ms)
+    setIsCalibrating(true);
     let calibrationSamples = [];
     for(let k=0; k<6; k++) {
       analyser.getByteTimeDomainData(buffer);
@@ -130,7 +132,11 @@ export function useRecorder(lang, withVideo = false) {
       calibrationSamples.push(Math.sqrt(sum / buffer.length));
       await new Promise(r => setTimeout(r, 50));
     }
-    const noiseFloor = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
+    setIsCalibrating(false);
+    
+    // Use median (or lower quartile) to ignore sudden speech spikes
+    calibrationSamples.sort((a, b) => a - b);
+    const noiseFloor = calibrationSamples[2]; // Median of 6 samples
     // Set threshold slightly above noise floor, but within safe bounds
     silenceThresholdRef.current = Math.max(0.015, Math.min(0.08, noiseFloor * 2.0));
 
@@ -168,6 +174,8 @@ export function useRecorder(lang, withVideo = false) {
       recognition.onerror = () => { /* Aufnahme läuft auch ohne Transkript weiter */ };
       try { recognition.start(); } catch { /* bereits gestartet */ }
       recognitionRef.current = recognition;
+    } else {
+      setError('Live-Transkription wird von diesem Browser nicht unterstützt. Bitte nutze Chrome oder Safari.');
     }
 
     startedAtRef.current = Date.now();
@@ -203,5 +211,5 @@ export function useRecorder(lang, withVideo = false) {
     mediaRecorderRef.current = null;
   }), [cleanup]);
 
-  return { isRecording, transcript, level, error, start, stop, stream };
+  return { isRecording, isCalibrating, transcript, level, error, start, stop, stream };
 }

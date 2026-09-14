@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { computeLevel, computeStreak, modeTitle, getDailyChallenge } from '../utils/speech';
+import { computeLevel, computeStreak, modeTitle, getDailyChallenge, getSessionDate } from '../utils/speech';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain, Flame } from 'lucide-react';
 
@@ -228,7 +228,7 @@ export const DashboardScreen = () => {
                     </div>
                     <div>
                       <div className="font-semibold text-slate-800 text-sm">{s.modeLabel || getDisplayTitle(s.mode)}</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{new Date(s.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })}</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{getSessionDate(s).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })}</div>
                     </div>
                   </div>
                   <div className="text-right">

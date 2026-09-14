@@ -16,6 +16,7 @@ import { RecorderFlow } from './screens/RecorderFlow';
 import InterviewFlow from './screens/InterviewFlow';
 
 import { PrivacyScreen, ImprintScreen, TermsScreen } from './screens/Legal';
+import { ToastProvider } from './context/ToastContext';
 
 const BottomNav = () => {
   const location = useLocation();
@@ -85,9 +86,11 @@ const AppRoutes = () => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
+      <ToastProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </ToastProvider>
     </AuthProvider>
   );
 }

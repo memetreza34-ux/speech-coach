@@ -19,8 +19,8 @@
       },
       "permissions": {
         "read": "userId == request.auth.uid",
-        "create": "userId == request.auth.uid",
-        "update": "userId == request.auth.uid && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium']))"
+        "create": "userId == request.auth.uid && (!request.resource.data.keys().hasAny(['isPremium', 'customModes']) || (request.resource.data.isPremium == false && request.resource.data.customModes == []))",
+        "update": "userId == request.auth.uid && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium', 'customModes']))"
       },
       "subcollections": []
     },
@@ -31,7 +31,9 @@
       "schema": {
         "mode": "string",
         "modeLabel": "string",
-        "date": "timestamp",
+        "date": "string",
+        "createdAt": "timestamp",
+        "timestamp": "timestamp",
         "sessionType": "string",
         "durationMs": "number",
         "fillers": "number",
@@ -40,10 +42,10 @@
         "longestPauseMs": "number",
         "dynamics": "number",
         "speakingRatio": "number",
-        "confidenceScore": "number",
+        "confidenceScore": "number?",
         "pacingStatus": "string",
         "transcript": "string",
-        "aiTip": "object"
+        "aiTip": "object?"
       },
       "permissions": {
         "read": "userId == request.auth.uid",

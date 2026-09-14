@@ -140,7 +140,7 @@ export default function InterviewFlow() {
               mode: modeId,
               modeLabel: modeTitle(modeId),
               date: new Date().toISOString(),
-              timestamp: serverTimestamp(),
+              createdAt: serverTimestamp(),
               sessionType: 'interview',
               fillers: aiFeedback?.fillers ?? null,
               confidenceScore: aiFeedback?.confidenceScore ?? null,

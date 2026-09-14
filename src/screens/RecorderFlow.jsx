@@ -82,7 +82,7 @@ export const RecorderFlow = () => {
   const displayPrompt = customModeData ? customModeData.prompt : getPromptForMode(modeId);
   
   const locale = getLocaleForMode(modeId);
-  const { isRecording, transcript, level, error, start, stop, stream } = useRecorder(locale, useVideo);
+  const { isRecording, isCalibrating, transcript, level, error, start, stop, stream } = useRecorder(locale, useVideo);
   const [elapsedMs, setElapsedMs] = useState(0);
 
   useEffect(() => {
@@ -132,7 +132,7 @@ export const RecorderFlow = () => {
           mode: modeId,
           modeLabel: displayTitle,
           date: new Date().toISOString(), // Fallback for local quick render
-          timestamp: serverTimestamp(),
+          createdAt: serverTimestamp(),
           sessionType: 'recording',
           fillers: result.fillers,
           wpm: result.wpm,
@@ -207,10 +207,10 @@ export const RecorderFlow = () => {
                 })}
               </div>
               <p className={`text-center text-sm leading-relaxed px-4 min-h-[5rem] ${error ? 'text-red-500' : 'text-slate-500'}`}>
-                {error || transcript || (isRecording ? 'Aufnahme läuft …' : 'Drücke Start, wenn du bereit bist.')}
+                {error || transcript || (isCalibrating ? 'Mikrofon wird kalibriert…' : (isRecording ? 'Aufnahme läuft …' : 'Drücke Start, wenn du bereit bist.'))}
               </p>
             </div>
-            <motion.button whileTap={{ scale: 0.98 }} className={`mt-auto w-full flex items-center justify-center gap-2 py-4 rounded-xl text-white font-medium transition-colors ${isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'}`} onClick={toggleRecording}>
+            <motion.button disabled={isCalibrating} whileTap={{ scale: isCalibrating ? 1 : 0.98 }} className={`mt-auto w-full flex items-center justify-center gap-2 py-4 rounded-xl text-white font-medium transition-colors ${isCalibrating ? 'bg-slate-400 cursor-not-allowed' : (isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700')}`} onClick={toggleRecording}>
               {isRecording ? <><Square size={18} fill="currentColor" /> Beenden</> : <><Mic size={18} strokeWidth={2.5} /> Starten</>}
             </motion.button>
           </div>

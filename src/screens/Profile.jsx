@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2, Trash2 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
@@ -24,6 +25,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText
 
 export const ProfileScreen = () => {
   const { profile, updateProfile, logout, deleteAccount, deleteTrainingData, user } = useAuth();
+  const { addToast } = useToast();
   const [formData, setFormData] = useState({
     name: profile?.name || '',
     role: profile?.role || '',
@@ -31,7 +33,6 @@ export const ProfileScreen = () => {
     hobbies: profile?.hobbies || ''
   });
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
   const [history, setHistory] = useState([]);
   
   const [aiPersona, setAiPersona] = useState(null);
@@ -59,13 +60,11 @@ export const ProfileScreen = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaveMessage('');
     try {
       await updateProfile(formData);
-      setSaveMessage('Erfolgreich gespeichert!');
-      setTimeout(() => setSaveMessage(''), 3000);
+      addToast('Erfolgreich gespeichert!', 'success');
     } catch (e) {
-      setSaveMessage('Fehler beim Speichern.');
+      addToast('Fehler beim Speichern.', 'error');
     } finally {
       setSaving(false);
     }
@@ -103,10 +102,11 @@ export const ProfileScreen = () => {
       } else if (confirmModal.type === 'data') {
         await deleteTrainingData();
         setHistory([]);
+        addToast('Trainingsdaten erfolgreich gelöscht.', 'success');
         setConfirmModal({ isOpen: false, type: null });
       }
     } catch (e) {
-      alert("Fehler beim Löschen. Bitte versuche es erneut.");
+      addToast("Fehler beim Löschen. Bitte versuche es erneut.", 'error');
       setConfirmModal({ isOpen: false, type: null });
     } finally {
       setIsDeleting(false);
@@ -160,7 +160,6 @@ export const ProfileScreen = () => {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-8 space-y-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Persönliche Daten</h3>
-            {saveMessage && <span className="text-xs text-indigo-600 font-medium">{saveMessage}</span>}
           </div>
           <p className="text-xs text-slate-500 mb-6">Diese Daten helfen der KI, die Coaching-Szenarien und das Feedback an dich anzupassen.</p>
 
