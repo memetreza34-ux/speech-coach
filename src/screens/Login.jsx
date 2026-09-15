@@ -6,7 +6,7 @@ import { useToast } from '../context/ToastContext';
 
 export const LoginScreen = () => {
   const { loginWithGoogle } = useAuth();
-  const { showToast } = useToast();
+  const { addToast } = useToast();
 
   const handleLogin = async () => {
     try {
@@ -16,7 +16,7 @@ export const LoginScreen = () => {
         // user aborted, ignore
         return;
       }
-      showToast('Anmeldung fehlgeschlagen. Bitte versuche es erneut.', 'error');
+      addToast('Anmeldung fehlgeschlagen. Bitte versuche es erneut.', 'error');
     }
   };
 

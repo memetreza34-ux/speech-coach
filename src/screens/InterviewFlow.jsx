@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Square, Loader2, ChevronLeft, Volume2, User } from 'lucide-react';
+import { Mic, Square, Loader2, ChevronLeft, Volume2, User, RefreshCcw } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useRecorder } from '../useRecorder';
 import { getPromptForMode, modeTitle, MODES } from '../utils/speech';
 import { auth, db } from '../lib/firebase';
@@ -12,6 +13,7 @@ export default function InterviewFlow() {
   const { modeId } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { addToast } = useToast();
   
   // Premium Guard
   useEffect(() => {
@@ -23,6 +25,7 @@ export default function InterviewFlow() {
 
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [failedTurnContext, setFailedTurnContext] = useState(null);
   const [feedback, setFeedback] = useState('');
   const [sessionMetrics, setSessionMetrics] = useState({
     totalDurationMs: 0,
@@ -83,7 +86,8 @@ export default function InterviewFlow() {
           frames: frames.length > 0 ? frames : undefined
         })
       });
-      if (response.ok) {
+            if (response.ok) {
+        setFailedTurnContext(null);
         const data = await response.json();
         
         // Add AI response to messages
@@ -95,7 +99,9 @@ export default function InterviewFlow() {
         
         if (data.isFinished) {
           // Final Evaluation via /api/analyze
-          const finalTranscript = chatHistory.filter(m => m.role === 'user').map(m => m.text).join('\n');
+          const completeHistory = [...chatHistory, { role: 'model', text: data.interviewerSpeech }];
+          const finalTranscript = completeHistory.filter(m => m.text !== 'Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.').map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n');
+          
           const finalWpm = currentMetrics.totalDurationMs > 0 ? Math.round((currentMetrics.totalWords / (currentMetrics.totalDurationMs / 1000 / 60))) : 0;
           
           const finalSpeakingRatio = currentMetrics.totalDurationMs > 0 
@@ -116,6 +122,7 @@ export default function InterviewFlow() {
           };
 
           let aiFeedback = null;
+          let aiStatus = 'not_available';
           try {
              const analyzeRes = await fetch('/api/analyze', {
                 method: 'POST',
@@ -128,9 +135,18 @@ export default function InterviewFlow() {
                   customPrompt: "Bewerte das Live-Interview abschließend und gib einen Gesamt-Score."
                 })
              });
-             if (analyzeRes.ok) aiFeedback = await analyzeRes.json();
+             if (analyzeRes.ok) {
+                 aiFeedback = await analyzeRes.json();
+                 aiStatus = 'success';
+             } else {
+                 if (analyzeRes.status === 429) aiStatus = 'quota_exceeded';
+                 else if (analyzeRes.status === 504) aiStatus = 'timeout';
+                 else if (analyzeRes.status === 502) aiStatus = 'invalid_response';
+                 else aiStatus = 'server_error';
+             }
           } catch(e) {
              console.error("Evaluation error", e);
+             aiStatus = 'server_error';
           }
           
           // Save session
@@ -145,17 +161,28 @@ export default function InterviewFlow() {
               fillers: aiFeedback?.fillers ?? null,
               confidenceScore: aiFeedback?.confidenceScore ?? null,
               aiTip: aiFeedback?.aiTip ?? null,
+              aiStatus: aiStatus,
               wpm: finalMetrics.wpm,
               dynamics: finalMetrics.dynamics,
               speakingRatio: finalMetrics.speakingRatio,
               pauseCount: finalMetrics.pauseCount,
               longestPauseMs: finalMetrics.longestPauseMs,
               durationMs: finalMetrics.durationMs,
-              transcript: chatHistory.map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n')
+              transcript: finalTranscript
             }).catch(console.error);
           }
           setTimeout(() => navigate('/dashboard'), 5000);
         }
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        let errMsg = 'Ein Fehler ist aufgetreten.';
+        if (response.status === 429) errMsg = 'Dein tägliches Live-Interview-Limit ist erreicht.';
+        else if (response.status === 403) errMsg = 'Live-Interviews erfordern ein Premium-Abonnement.';
+        else if (response.status === 504) errMsg = 'Die KI antwortet gerade nicht. Versuche es erneut.';
+        else if (response.status === 500 || response.status === 502) errMsg = errData.error || 'Verbindung fehlgeschlagen.';
+        
+        addToast(errMsg, 'error');
+        setFailedTurnContext(chatHistory);
       }
     } catch (e) {
       console.error(e);
@@ -279,7 +306,7 @@ export default function InterviewFlow() {
 
         {/* Feedback Snippet */}
         <AnimatePresence>
-          {feedback && !isRecording && !isProcessing && (
+          {feedback && !isRecording && !isProcessing && !failedTurnContext && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400"></div>
               <div className="text-[10px] font-bold text-amber-800 tracking-widest uppercase mb-1">Coach-Tipp zur letzten Antwort</div>
@@ -290,15 +317,26 @@ export default function InterviewFlow() {
 
         {/* Recording Controls */}
         <div className="shrink-0 flex flex-col items-center">
-          <button
-            onClick={handleToggleRecording}
-            disabled={isProcessing}
-            className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${isProcessing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : isRecording ? 'bg-rose-500 text-white hover:bg-rose-600 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105'}`}
-          >
-            {isRecording ? <Square size={28} /> : <Mic size={32} />}
-          </button>
+          {failedTurnContext ? (
+            <button
+              onClick={() => sendTurn(failedTurnContext)}
+              disabled={isProcessing}
+              className={`w-auto px-6 h-14 rounded-full flex items-center justify-center gap-2 transition-all shadow-lg font-bold ${isProcessing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700 hover:scale-105'}`}
+            >
+              <RefreshCcw size={20} />
+              Erneut versuchen
+            </button>
+          ) : (
+            <button
+              onClick={handleToggleRecording}
+              disabled={isProcessing}
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${isProcessing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : isRecording ? 'bg-rose-500 text-white hover:bg-rose-600 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105'}`}
+            >
+              {isRecording ? <Square size={28} /> : <Mic size={32} />}
+            </button>
+          )}
           <div className="mt-4 text-xs font-medium text-slate-500 uppercase tracking-widest">
-            {isProcessing ? 'Bitte warten' : isRecording ? 'Tippe zum Beenden' : 'Antwort aufnehmen'}
+            {isProcessing ? 'Bitte warten' : failedTurnContext ? 'Übertragung fehlgeschlagen' : isRecording ? 'Tippe zum Beenden' : 'Antwort aufnehmen'}
           </div>
           {isRecording && (
             <div className="mt-4 w-full max-w-sm px-6 text-center text-sm text-slate-400 italic truncate">

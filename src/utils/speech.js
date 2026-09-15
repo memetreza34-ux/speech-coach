@@ -140,10 +140,19 @@ export const analyzeTranscript = async (recording, mode, profile) => {
   };
   measured.pacingStatus = getPacingStatus(measured.wpm);
 
-  const fallback = (aiTip, isQuotaError = false) => ({ ...measured, fillers: countFillers(transcript), confidenceScore: null, aiTip, isDummy: true, isQuotaError });
+  const fallback = (errorMessage, status = 'server_error') => ({ 
+    ...measured, 
+    fillers: countFillers(transcript), 
+    confidenceScore: null, 
+    aiTip: null, 
+    systemMessage: errorMessage,
+    isDummy: true, 
+    isQuotaError: status === 'quota_exceeded',
+    aiStatus: status
+  });
 
   if (!transcript.trim()) {
-    return fallback("Es wurde kein Text erkannt. Sprich etwas lauter oder prüfe dein Mikrofon.");
+    return fallback("Es wurde kein Text erkannt. Sprich etwas lauter oder prüfe dein Mikrofon.", "not_available");
   }
 
   try {
@@ -157,19 +166,24 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     if (!response.ok) {
       const errBody = await response.json().catch(() => null);
       console.error("Analyse-Server Fehler:", response.status, errBody);
-      if (response.status === 429) {
-        return fallback("Dein tägliches KI-Limit ist erreicht.", true);
-      }
-      const tip = response.status === 404
-        ? "Kein Analyse-Server erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt."
-        : (errBody?.error || "Die KI-Analyse ist fehlgeschlagen. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.");
-      return fallback(tip);
+      if (response.status === 429) return fallback("Dein tägliches KI-Limit ist erreicht.", "quota_exceeded");
+      if (response.status === 504) return fallback("Zeitüberschreitung bei der KI-Analyse.", "timeout");
+      if (response.status === 502) return fallback("Ungültige Antwort von der KI erhalten.", "invalid_response");
+      
+      const tip = errBody?.error || "Die KI-Analyse ist fehlgeschlagen. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.";
+      return fallback(tip, "server_error");
     }
 
     const { fillers, confidenceScore, aiTip } = await response.json();
-    return { ...measured, fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), confidenceScore: typeof confidenceScore === 'number' ? confidenceScore : null, aiTip };
+    return { 
+      ...measured, 
+      fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), 
+      confidenceScore: typeof confidenceScore === 'number' ? confidenceScore : null, 
+      aiTip,
+      aiStatus: 'success'
+    };
   } catch (e) {
     console.error("AI Error:", e);
-    return fallback("Der Analyse-Server ist nicht erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.");
+    return fallback("Der Analyse-Server ist nicht erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.", "server_error");
   }
 };

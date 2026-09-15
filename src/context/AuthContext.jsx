@@ -76,6 +76,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      setProfile(null);
+      setUser(null);
       await signOut(auth);
       setAuthError(null);
     } catch (error) {

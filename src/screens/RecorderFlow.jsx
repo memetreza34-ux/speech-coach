@@ -21,12 +21,11 @@ const MetricCard = ({ label, value, hint, alert }) => (
 );
 
 const renderAiTip = (analysisData, profile, navigate) => {
-  const { aiTip, isQuotaError } = analysisData;
-  if (!aiTip) return null;
-  if (typeof aiTip === 'string') {
+  const { aiTip, systemMessage, isQuotaError } = analysisData;
+  if (systemMessage) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-indigo-900 leading-relaxed">{aiTip}</p>
+        <p className="text-sm text-indigo-900 leading-relaxed">{systemMessage}</p>
         {isQuotaError && !profile?.isPremium && (
           <button 
             onClick={() => navigate('/paywall')}
@@ -35,6 +34,15 @@ const renderAiTip = (analysisData, profile, navigate) => {
             Pro ansehen
           </button>
         )}
+      </div>
+    );
+  }
+  
+  if (!aiTip) return null;
+  if (typeof aiTip === 'string') {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-indigo-900 leading-relaxed">{aiTip}</p>
       </div>
     );
   }
@@ -156,6 +164,8 @@ export const RecorderFlow = () => {
           speakingRatio: result.speakingRatio,
           confidenceScore: result.confidenceScore,
           aiTip: result.aiTip,
+          systemMessage: result.systemMessage || null,
+          aiStatus: result.aiStatus || 'not_available',
           transcript: recording.transcript,
           durationMs: recording.durationMs
         });

@@ -20,11 +20,16 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={{ addToast }}>
       {children}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none px-4 w-full max-w-md">
+      <div 
+        aria-live="polite" 
+        aria-atomic="true" 
+        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none px-4 w-full max-w-md"
+      >
         <AnimatePresence>
           {toasts.map(toast => (
             <motion.div
               key={toast.id}
+              role={toast.type === 'error' ? 'alert' : 'status'}
               initial={{ opacity: 0, y: 20, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.9 }}
@@ -40,7 +45,8 @@ export const ToastProvider = ({ children }) => {
               <span className="flex-1">{toast.message}</span>
               <button 
                 onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                className="opacity-50 hover:opacity-100 transition-opacity p-1"
+                className="opacity-50 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 rounded-md transition-opacity p-1"
+                aria-label="Meldung schließen"
               >
                 <X size={16} />
               </button>

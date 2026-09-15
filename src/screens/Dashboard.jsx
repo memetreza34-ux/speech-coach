@@ -45,12 +45,12 @@ export const DashboardScreen = () => {
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10 pb-28 overflow-y-auto" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
       <div className="max-w-md mx-auto w-full">
-        <div className="flex justify-between items-end mb-8">
-          <div>
+        <div className="flex justify-between items-end mb-8 gap-4">
+          <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-slate-500 tracking-widest uppercase mb-1">Willkommen zurück</div>
-            <h1 className="text-3xl font-serif text-slate-900">{profile?.name || 'Speaker'}</h1>
+            <h1 className="text-3xl font-serif text-slate-900 truncate">{profile?.name || 'Speaker'}</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {streak > 0 && (
               <div className="flex items-center gap-1.5 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide">
                 <Flame size={14} className="fill-orange-500 text-orange-500" /> {streak}
