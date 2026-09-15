@@ -12,6 +12,7 @@ export const ArenaScreen = () => {
   const navigate = useNavigate();
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [customForm, setCustomForm] = useState({ title: '', prompt: '' });
 
   const customModes = profile?.customModes || [];
@@ -57,9 +58,15 @@ export const ArenaScreen = () => {
   };
 
   
-  const handleDeleteCustom = async (e, id) => {
+  const requestDeleteCustom = (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('Möchtest du dieses eigene Szenario wirklich löschen?')) return;
+    setConfirmDeleteId(id);
+  };
+
+  const executeDeleteCustom = async () => {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       const token = await user?.getIdToken();
@@ -123,7 +130,8 @@ export const ArenaScreen = () => {
                       <div className="flex justify-between items-start">
                         <IconComponent className="text-white/80" size={24} />
                         <button 
-                          onClick={(e) => handleDeleteCustom(e, mode.id)}
+                          onClick={(e) => requestDeleteCustom(e, mode.id)}
+                          aria-label="Szenario löschen"
                           disabled={deletingId === mode.id}
                           className="p-1 rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white disabled:opacity-50"
                         >
@@ -180,7 +188,20 @@ export const ArenaScreen = () => {
       </div>
 
       <AnimatePresence>
-        {showCustomModal && (
+        {confirmDeleteId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{opacity: 0, scale: 0.95}} animate={{opacity: 1, scale: 1}} className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6">
+            <h3 className="text-xl font-serif text-slate-900 mb-2">Szenario löschen?</h3>
+            <p className="text-slate-600 text-sm mb-6">Möchtest du dieses eigene Szenario wirklich endgültig löschen? Dieser Schritt kann nicht rückgängig gemacht werden.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Abbrechen</button>
+              <button onClick={executeDeleteCustom} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-colors">Endgültig löschen</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      
+      {showCustomModal && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6"

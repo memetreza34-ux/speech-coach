@@ -70,6 +70,8 @@ export function createApp() {
     return parsed;
   };
 
+  // Quota Reset Documention: Quotas reset at 00:00 UTC.
+  // A simple ISO string date is used to represent 'today'.
   const consumeQuota = async (uid, isPremium, type) => {
     const today = new Date().toISOString().split('T')[0];
     const docRef = db.collection('users').doc(uid).collection('usage').doc(today);
@@ -114,6 +116,14 @@ export function createApp() {
     });
   };
 
+  const safeRefundQuota = async (uid, type) => {
+    try {
+      await refundQuota(uid, type);
+    } catch (e) {
+      console.error(`Error refunding quota for user ${uid}, type ${type}:`, e);
+    }
+  };
+
   app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
   
   // Release Health Endpoint
@@ -121,6 +131,41 @@ export function createApp() {
 
   app.use('/api/', apiLimiter);
   app.use('/api/', requireAuth);
+
+  app.get('/api/usage', async (req, res) => {
+    try {
+      const userDoc = await db.collection('users').doc(req.user.uid).get();
+      const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+      const customModesCount = userDoc.exists ? (userDoc.data().customModes || []).length : 0;
+      
+      const limits = {
+        analyze: isPremium ? getPositiveIntEnv('PRO_DAILY_ANALYZE', 25) : getPositiveIntEnv('FREE_DAILY_ANALYZE', 5),
+        interviewTurn: isPremium ? getPositiveIntEnv('PRO_DAILY_INTERVIEW_TURNS', 50) : 0,
+        progress: isPremium ? getPositiveIntEnv('PRO_DAILY_PROGRESS', 5) : getPositiveIntEnv('FREE_DAILY_PROGRESS', 1),
+        persona: isPremium ? getPositiveIntEnv('PRO_DAILY_PERSONA', 10) : getPositiveIntEnv('FREE_DAILY_PERSONA', 2),
+        customModes: isPremium ? getPositiveIntEnv('PRO_CUSTOM_MODES', 20) : getPositiveIntEnv('FREE_CUSTOM_MODES', 1)
+      };
+
+      const today = new Date().toISOString().split('T')[0];
+      const usageDoc = await db.collection('users').doc(req.user.uid).collection('usage').doc(today).get();
+      const usage = usageDoc.exists ? usageDoc.data() : {};
+
+      return res.status(200).json({
+        plan: isPremium ? 'PRO' : 'FREE',
+        usage: {
+          analyze: usage.analyze || 0,
+          interviewTurn: usage.interviewTurn || 0,
+          progress: usage.progress || 0,
+          persona: usage.persona || 0,
+          customModes: customModesCount
+        },
+        limits
+      });
+    } catch (e) {
+      console.error('Usage endpoint error:', e);
+      return res.status(500).json({ error: 'Interner Serverfehler.' });
+    }
+  });
 
   // Helper to delete collections in batches
   async function deleteCollectionInBatches(collectionRef, batchSize = 400) {
@@ -215,7 +260,7 @@ export function createApp() {
         const customModes = data.customModes || [];
         const isPremium = data.isPremium === true;
         
-        const maxModes = isPremium ? parseInt(process.env.PRO_CUSTOM_MODES || 20) : parseInt(process.env.FREE_CUSTOM_MODES || 1);
+        const maxModes = isPremium ? getPositiveIntEnv('PRO_CUSTOM_MODES', 20) : getPositiveIntEnv('FREE_CUSTOM_MODES', 1);
         
         if (customModes.length >= maxModes) {
           throw new Error(`Limit für eigene Szenarien (${maxModes}) erreicht.`);
@@ -290,10 +335,7 @@ export function createApp() {
 
   app.post('/api/analyze', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Server ist nicht konfiguriert (GEMINI_API_KEY fehlt).' });
-    }
+    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert (GEMINI_API_KEY fehlt).' });
 
     const { transcript, mode, profile, metrics, customPrompt, frames } = req.body || {};
     
@@ -305,56 +347,44 @@ export function createApp() {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
 
+    // VALIDATION BEFORE QUOTA
     if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
-    
-    if (customPrompt !== undefined && typeof customPrompt !== 'string') {
-      return res.status(400).json({ error: 'Ungültiges Format für customPrompt.' });
-    }
-
     if (frames && (!Array.isArray(frames) || frames.length > 5)) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
     }
-    if (frames && frames.length > 0 && !isPremium) {
-      return res.status(403).json({ error: 'Die Kamera-Analyse erfordert ein Premium-Abonnement.' });
-    }
     if (frames) {
+      if (!isPremium) return res.status(403).json({ error: 'Kamera-Feedback erfordert ein Premium-Abonnement.' });
       let totalSize = 0;
       for (const frame of frames) {
-        if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) {
-           return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
-        }
+        if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
         totalSize += frame.length;
-        if (frame.length > 500000) { // Limit individual frame base64 length to ~500KB
-           return res.status(400).json({ error: 'Frame zu groß.' });
-        }
+        if (frame.length > 500000) return res.status(400).json({ error: 'Ein Frame ist zu groß.' });
       }
-      if (totalSize > 2000000) {
-        return res.status(400).json({ error: 'Gesamtgröße der Frames überschreitet das Limit.' });
-      }
+      if (totalSize > 2000000) return res.status(400).json({ error: 'Frames überschreiten das Gesamt-Limit von 2MB.' });
     }
 
-    if (!(await consumeQuota(req.user.uid, isPremium, 'analyze'))) {
-      return res.status(429).json({ error: 'Tägliches Limit für KI-Analysen erreicht.' });
-    }
-
-    const safeTranscript = transcript;
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
-    // Ensure profile fields are strings and trimmed
-    const profileName = typeof safeProfile.name === 'string' ? safeProfile.name.slice(0, 100) : '';
+    const profileName = typeof safeProfile.name === 'string' ? safeProfile.name.slice(0, 100) : 'Nutzer';
     const profileRole = typeof safeProfile.role === 'string' ? safeProfile.role.slice(0, 100) : '';
     const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
     const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
 
-    const m = metrics && typeof metrics === 'object' ? metrics : {};
+    const safeTranscript = transcript.slice(0, 10000);
+    const m = typeof metrics === 'object' && metrics ? metrics : {};
     
-    if (m.wpm !== undefined && (typeof m.wpm !== 'number' || m.wpm < 0 || m.wpm > 400)) return res.status(400).json({ error: 'Ungültiger WPM-Wert.' });
-    if (m.pauseCount !== undefined && (typeof m.pauseCount !== 'number' || m.pauseCount < 0)) return res.status(400).json({ error: 'Ungültiger pauseCount-Wert.' });
+    if (m.wpm !== undefined && (typeof m.wpm !== 'number' || m.wpm < 0 || m.wpm > 500)) return res.status(400).json({ error: 'Ungültiger wpm-Wert.' });
+    if (m.pauseCount !== undefined && (typeof m.pauseCount !== 'number' || m.pauseCount < 0 || m.pauseCount > 5000)) return res.status(400).json({ error: 'Ungültiger pauseCount-Wert.' });
     if (m.longestPauseMs !== undefined && (typeof m.longestPauseMs !== 'number' || m.longestPauseMs < 0 || (m.durationMs && m.longestPauseMs > m.durationMs))) return res.status(400).json({ error: 'Ungültiger longestPauseMs-Wert.' });
     if (m.speakingRatio !== undefined && (typeof m.speakingRatio !== 'number' || m.speakingRatio < 0 || m.speakingRatio > 100)) return res.status(400).json({ error: 'Ungültiger speakingRatio-Wert.' });
     if (m.dynamics !== undefined && (typeof m.dynamics !== 'number' || m.dynamics < 0 || m.dynamics > 500)) return res.status(400).json({ error: 'Ungültiger dynamics-Wert.' });
     if (m.durationMs !== undefined && (typeof m.durationMs !== 'number' || m.durationMs < 0 || m.durationMs > 3600000)) return res.status(400).json({ error: 'Ungültiger durationMs-Wert.' });
+
+    // CONSUME QUOTA AFTER ALL VALIDATIONS
+    if (!(await consumeQuota(req.user.uid, isPremium, 'analyze'))) {
+      return res.status(429).json({ error: 'Tägliches Limit für Aufnahmen erreicht.' });
+    }
 
     const wpm = m.wpm ?? '?';
     const pauseCount = m.pauseCount ?? '?';
@@ -438,40 +468,56 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       clearTimeout(timeout);
 
       if (!response.ok) {
-        await refundQuota(req.user.uid, 'analyze');
-        const errBody = await response.text().catch(() => '');
-        console.error('Gemini API Fehler:', response.status, errBody);
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
-        await refundQuota(req.user.uid, 'analyze');
-        console.error('Gemini: leere oder blockierte Antwort', data);
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).' });
       }
 
-      const parsed = JSON.parse(resultText);
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (e) {
+        await safeRefundQuota(req.user.uid, 'analyze');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+      }
       
       // Strict Output Validation
       if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) {
-        await refundQuota(req.user.uid, 'analyze');
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'fillers missing or invalid' });
       }
       if (parsed.confidenceScore !== null && (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100)) {
-        await refundQuota(req.user.uid, 'analyze');
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'confidenceScore invalid' });
       }
       if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
-        await refundQuota(req.user.uid, 'analyze');
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'aiTip missing or invalid' });
       }
-      if (typeof parsed.aiTip.summary !== 'string') await refundQuota(req.user.uid, 'analyze'); return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'summary missing' });
-      if (typeof parsed.aiTip.strengths !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
-      if (typeof parsed.aiTip.improvements !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
-      if (typeof parsed.aiTip.actionTip !== 'string') return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
+      if (typeof parsed.aiTip.summary !== 'string') {
+        await safeRefundQuota(req.user.uid, 'analyze');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'summary missing' });
+      }
+      if (typeof parsed.aiTip.strengths !== 'string') {
+        await safeRefundQuota(req.user.uid, 'analyze');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
+      }
+      if (typeof parsed.aiTip.improvements !== 'string') {
+        await safeRefundQuota(req.user.uid, 'analyze');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
+      }
+      if (typeof parsed.aiTip.actionTip !== 'string') {
+        await safeRefundQuota(req.user.uid, 'analyze');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
+      }
       if (parsed.aiTip.bodyLanguage !== null && parsed.aiTip.bodyLanguage !== undefined && typeof parsed.aiTip.bodyLanguage !== 'string') {
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
       }
 
@@ -479,15 +525,11 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     } catch (e) {
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'analyze');
         return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
       }
       console.error('AI Error:', e);
-      await refundQuota(req.user.uid, 'analyze');
+      await safeRefundQuota(req.user.uid, 'analyze');
       return res.status(500).json({ error: 'Interner Fehler bei der KI-Analyse.' });
     }
   });
@@ -499,13 +541,20 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
     const { mode, messages, profile, customPrompt, frames } = req.body || {};
     
-    // Server-side Premium Check (Always required for Live Interviews)
+    // Server-side Premium Check
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists || userDoc.data().isPremium !== true) {
       return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.' });
     }
 
-    if (!Array.isArray(messages) || messages.length > 50) return res.status(400).json({ error: 'Messages ungültig oder zu lang.' });
+    // VALIDATION BEFORE QUOTA
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 50) return res.status(400).json({ error: 'Messages ungültig oder zu lang.' });
+    
+    for (const msg of messages) {
+      if (msg.role !== 'user' && msg.role !== 'model') return res.status(400).json({ error: 'Ungültige role.' });
+      if (typeof msg.text !== 'string' || msg.text.length > 2000) return res.status(400).json({ error: 'Ungültiger text.' });
+    }
+
     if (frames && (!Array.isArray(frames) || frames.length > 5)) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
     }
@@ -521,6 +570,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       if (totalSize > 2000000) return res.status(400).json({ error: 'Frames überschreiten das Gesamt-Limit von 2MB.' });
     }
 
+    // CONSUME QUOTA AFTER ALL VALIDATIONS
     if (!(await consumeQuota(req.user.uid, true, 'interviewTurn'))) {
       return res.status(429).json({ error: 'Tägliches Limit für Interview-Züge erreicht.' });
     }
@@ -535,58 +585,42 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
     const systemInstruction = `Du bist ein professioneller, empathischer aber anspruchsvoller Interviewer für folgendes Szenario:
 ${contextPrompt}
-Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
 
-Deine Aufgabe: Führe das Gespräch.
-Bei jeder Nachricht des Nutzers analysierst du kurz intern seine Antwort (Struktur, Klarheit, Überzeugungskraft) und generierst dann DEINE NÄCHSTE ANTWORT.
+Profil des Bewerbers: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
 
-WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüsseln zurück:
-"interviewerSpeech": "Das, was du als nächstes zum Nutzer sagst (nächste Frage oder Reaktion).",
-"feedback": "Ein kurzer (1 Satz) geheimer Tipp an den Nutzer, wie seine letzte Antwort war und was er besser machen kann (wird dem Nutzer als Coach-Tipp angezeigt).",
-"isFinished": boolean (Setze dies auf true, wenn das Interview nach dieser Antwort vorbei ist, sonst false).`;
+Deine Aufgabe:
+- Reagiere auf die Antwort des Bewerbers.
+- Stelle danach EINE gute, realistische Anschlussfrage oder eine neue fachliche/persönliche Frage, die zur Rolle passt.
+- Gib KEIN direktes Feedback im "interviewerSpeech" Feld - das ist das was du SACHLICH im Gespräch sagst.
+- Gib zusätzlich ein kurzes konstruktives "feedback" (1-2 Sätze) für den Nutzer (unsichtbar für das Gespräch, als Tipp).
+- Beende das Interview selbstständig nach etwa 5-6 Fragen ("isFinished": true), und verabschiede dich freundlich.
 
-    const contents = [];
-    for (const msg of messages) {
-      if (typeof msg.role !== 'string' || !['user', 'model'].includes(msg.role)) {
-        return res.status(400).json({ error: 'Ungültige Message Role.' });
+Gib immer strikt dieses JSON Format zurück:
+{
+  "interviewerSpeech": "Dein gesprochener Text als Interviewer",
+  "feedback": "Dein geheimer Coach-Tipp zum letzten Zug des Nutzers",
+  "isFinished": boolean
+}`;
+
+    const formattedMessages = messages.map(m => ({
+      role: m.role,
+      parts: [{ text: m.text }]
+    }));
+
+    if (frames && frames.length > 0) {
+      const lastMessage = formattedMessages[formattedMessages.length - 1];
+      if (lastMessage.role === 'user') {
+        frames.forEach(imgBase64 => {
+          lastMessage.parts.push({
+            inlineData: { mimeType: "image/jpeg", data: imgBase64.replace(/^data:image\/\w+;base64,/, "") }
+          });
+        });
+        lastMessage.parts.push({ text: "\nHinweis: Oben siehst du Bilder des Nutzers. Beziehe Körpersprache (z.B. Blickkontakt, Haltung) kurz in dein 'feedback' Feld ein." });
       }
-      if (typeof msg.text !== 'string' || msg.text.length > 2000) {
-        return res.status(400).json({ error: 'Ungültiger Message Text.' });
-      }
-      contents.push({
-        role: msg.role,
-        parts: [{ text: msg.text }]
-      });
-    }
-
-    if (frames && (!Array.isArray(frames) || frames.length > 5)) {
-      return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
-    }
-
-    // Optionally append images to the latest user message if available
-    if (frames && Array.isArray(frames) && frames.length > 0 && contents.length > 0) {
-       const lastMsg = contents[contents.length - 1];
-       if (lastMsg.role === 'user') {
-         let totalSize = 0;
-         for (const imgBase64 of frames) {
-           if (typeof imgBase64 !== 'string' || !imgBase64.startsWith('data:image/jpeg;base64,')) {
-             return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
-           }
-           totalSize += imgBase64.length;
-           if (imgBase64.length > 500000) {
-             return res.status(400).json({ error: 'Frame zu groß.' });
-           }
-           const data = imgBase64.replace(/^data:image\/\w+;base64,/, "");
-           lastMsg.parts.push({ inlineData: { mimeType: "image/jpeg", data } });
-         }
-         if (totalSize > 2000000) {
-           return res.status(400).json({ error: 'Gesamtgröße der Frames überschreitet das Limit.' });
-         }
-       }
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 18000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -594,7 +628,7 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
+          contents: formattedMessages,
           generationConfig: { 
             responseMimeType: 'application/json',
             responseSchema: {
@@ -613,36 +647,36 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
       clearTimeout(timeout);
 
       if (!response.ok) {
-        await refundQuota(req.user.uid, 'interviewTurn');
-        const errBody = await response.text().catch(() => '');
-        console.error('Gemini API Fehler (Interview):', response.status, errBody);
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen.' });
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
         return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
       }
 
-      const parsed = JSON.parse(resultText);
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (e) {
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+      }
 
       // Validate output
       if (typeof parsed.interviewerSpeech !== 'string' || !parsed.interviewerSpeech.trim()) {
-        await refundQuota(req.user.uid, 'interviewTurn');
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'interviewerSpeech missing' });
       }
       if (typeof parsed.feedback !== 'string') {
-        await refundQuota(req.user.uid, 'interviewTurn');
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'feedback missing' });
       }
       if (typeof parsed.isFinished !== 'boolean') {
-        await refundQuota(req.user.uid, 'interviewTurn');
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'isFinished missing' });
       }
 
@@ -650,15 +684,11 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
     } catch (e) {
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'interviewTurn');
         return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
       }
       console.error('AI Error (Interview):', e);
-      await refundQuota(req.user.uid, 'interviewTurn');
+      await safeRefundQuota(req.user.uid, 'interviewTurn');
       return res.status(500).json({ error: 'Interner Fehler beim Interview.' });
     }
   });
@@ -684,6 +714,7 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    
     if (!(await consumeQuota(req.user.uid, isPremium, 'progress'))) {
       return res.status(429).json({ error: 'Tägliches Limit für Fortschrittsanalysen erreicht.' });
     }
@@ -706,7 +737,7 @@ Bitte schreibe eine detaillierte, motivierende, aber sehr konkrete KI-Langzeitan
 Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter haben im Vergleich zu den ersten Sessions abgenommen").`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -719,9 +750,15 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
             responseSchema: {
               type: 'OBJECT',
               properties: {
-                insight: { type: 'STRING' },
-                strengths: { type: 'ARRAY', items: { type: 'STRING' } },
-                improvements: { type: 'ARRAY', items: { type: 'STRING' } }
+                insight: { type: 'STRING', description: 'Ein kurzer motivierender Hauptgedanke oder Erkenntnis (1-2 Sätze)' },
+                strengths: {
+                  type: 'ARRAY',
+                  items: { type: 'STRING' }
+                },
+                improvements: {
+                  type: 'ARRAY',
+                  items: { type: 'STRING' }
+                }
               },
               required: ['insight', 'strengths', 'improvements']
             }
@@ -733,40 +770,50 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
       clearTimeout(timeout);
 
       if (!response.ok) {
-        await refundQuota(req.user.uid, req.route.path === '/api/analyze-persona' ? 'persona' : 'progress');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen.' });
+        await safeRefundQuota(req.user.uid, 'progress');
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'progress');
         return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
       }
 
-      const parsed = JSON.parse(resultText);
-      if (typeof parsed.insight !== 'string' || !Array.isArray(parsed.strengths) || !Array.isArray(parsed.improvements)) {
-         await refundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch' });
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (e) {
+        await safeRefundQuota(req.user.uid, 'progress');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+      }
+      
+      // Strict Array Check
+      const isStringArray = (arr) => Array.isArray(arr) && arr.length <= 3 && arr.every(s => typeof s === 'string' && s.trim() !== '' && s.length < 500);
+
+      if (typeof parsed.insight !== 'string' || !parsed.insight.trim() || parsed.insight.length > 2000) {
+         await safeRefundQuota(req.user.uid, 'progress');
+         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid insight' });
+      }
+      if (!isStringArray(parsed.strengths)) {
+         await safeRefundQuota(req.user.uid, 'progress');
+         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid strengths' });
+      }
+      if (!isStringArray(parsed.improvements)) {
+         await safeRefundQuota(req.user.uid, 'progress');
+         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid improvements' });
       }
 
       return res.status(200).json(parsed);
     } catch (e) {
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'progress');
         return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
       }
       console.error('AI Error (Progress):', e);
-      await refundQuota(req.user.uid, 'progress');
+      await safeRefundQuota(req.user.uid, 'progress');
       return res.status(500).json({ error: 'Interner Fehler bei der Langzeitanalyse.' });
     }
   });
@@ -785,19 +832,22 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    
     if (!(await consumeQuota(req.user.uid, isPremium, 'persona'))) {
       return res.status(429).json({ error: 'Tägliches Limit für Persona-Analysen erreicht.' });
     }
 
-    const name = String(safeProfile.name || 'Nutzer').slice(0, 50);
-    const age = String(safeProfile.age || 'unbekannt').slice(0, 10);
-    const role = String(safeProfile.role || 'unbekannt').slice(0, 100);
-    const hobbies = String(safeProfile.hobbies || 'unbekannt').slice(0, 200);
+    const promptText = `Analysiere das Profil dieses Nutzers und erstelle ein humorvolles, aber zutreffendes "Speaker-Archetyp" Profil.
+Name: ${String(safeProfile.name || '').slice(0, 50)}
+Alter: ${String(safeProfile.age || '').slice(0, 20)}
+Rolle: ${String(safeProfile.role || '').slice(0, 100)}
+Hobbys: ${String(safeProfile.hobbies || '').slice(0, 500)}
 
-    const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Analysiere das Profil des Nutzers und erstelle eine "Kommunikations-Identität" (Persona).
-Profil: Name: ${name}, Alter: ${age}, Rolle/Beruf: ${role}, Interessen: ${hobbies}.
-
-Welcher Kommunikationstyp (Archetyp) passt zu dieser Person aufgrund ihres Berufs und ihrer Interessen? Welche rhetorischen Stärken sollte sie ausspielen und welche versteckten Fallen gibt es für sie?`;
+Gib als JSON zurück:
+archetype (Kurzer, cooler Name für diesen Rednertyp, z.B. "Der analytische Visionär")
+description (1-2 Sätze Beschreibung, wie dieser Typ üblicherweise spricht)
+superpower (Was ist vermutlich die größte Stärke dieses Typs?)
+trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -828,40 +878,41 @@ Welcher Kommunikationstyp (Archetyp) passt zu dieser Person aufgrund ihres Beruf
       clearTimeout(timeout);
 
       if (!response.ok) {
-        await refundQuota(req.user.uid, req.route.path === '/api/analyze-persona' ? 'persona' : 'progress');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen.' });
+        await safeRefundQuota(req.user.uid, 'persona');
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'persona');
         return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
       }
 
-      const parsed = JSON.parse(resultText);
-      if (typeof parsed.archetype !== 'string' || typeof parsed.description !== 'string' || typeof parsed.superpower !== 'string' || typeof parsed.trap !== 'string') {
-        await refundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch' });
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (e) {
+        await safeRefundQuota(req.user.uid, 'persona');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+      }
+
+      const isValidString = (s) => typeof s === 'string' && s.trim() !== '' && s.length < 500;
+      
+      if (!isValidString(parsed.archetype) || !isValidString(parsed.description) || !isValidString(parsed.superpower) || !isValidString(parsed.trap)) {
+        await safeRefundQuota(req.user.uid, 'persona');
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch or fields too long/empty' });
       }
 
       return res.status(200).json(parsed);
     } catch (e) {
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
-        let type = 'analyze';
-        if (req.route.path === '/api/interview') type = 'interviewTurn';
-        if (req.route.path === '/api/analyze-progress') type = 'progress';
-        if (req.route.path === '/api/analyze-persona') type = 'persona';
-        await refundQuota(req.user.uid, type);
+        await safeRefundQuota(req.user.uid, 'persona');
         return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
       }
       console.error('AI Error (Persona):', e);
-      await refundQuota(req.user.uid, 'persona');
+      await safeRefundQuota(req.user.uid, 'persona');
       return res.status(500).json({ error: 'Interner Fehler bei der Persona-Analyse.' });
     }
   });

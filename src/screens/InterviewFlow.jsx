@@ -139,9 +139,14 @@ export default function InterviewFlow() {
                  aiFeedback = await analyzeRes.json();
                  aiStatus = 'success';
              } else {
+                 let errBody = null;
+                 try { errBody = await analyzeRes.json(); } catch(e) {}
+                 
                  if (analyzeRes.status === 429) aiStatus = 'quota_exceeded';
                  else if (analyzeRes.status === 504) aiStatus = 'timeout';
-                 else if (analyzeRes.status === 502) aiStatus = 'invalid_response';
+                 else if (analyzeRes.status === 502) {
+                     aiStatus = errBody?.error?.includes('Upstream') ? 'upstream_error' : 'invalid_response';
+                 }
                  else aiStatus = 'server_error';
              }
           } catch(e) {
@@ -186,6 +191,8 @@ export default function InterviewFlow() {
       }
     } catch (e) {
       console.error(e);
+      addToast('Verbindung fehlgeschlagen. Versuche es erneut.', 'error');
+      setFailedTurnContext(chatHistory);
     } finally {
       setIsProcessing(false);
       setFrames([]); // reset frames for next turn
