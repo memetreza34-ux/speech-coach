@@ -20,10 +20,23 @@ const MetricCard = ({ label, value, hint, alert }) => (
   </div>
 );
 
-const renderAiTip = (aiTip) => {
+const renderAiTip = (analysisData, profile, navigate) => {
+  const { aiTip, isQuotaError } = analysisData;
   if (!aiTip) return null;
   if (typeof aiTip === 'string') {
-    return <p className="text-sm text-indigo-900 leading-relaxed">{aiTip}</p>;
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-indigo-900 leading-relaxed">{aiTip}</p>
+        {isQuotaError && !profile?.isPremium && (
+          <button 
+            onClick={() => navigate('/paywall')}
+            className="mt-4 px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-full shadow-sm hover:bg-indigo-700 transition-colors"
+          >
+            Pro ansehen
+          </button>
+        )}
+      </div>
+    );
   }
   return (
     <div className="space-y-4">
@@ -263,7 +276,7 @@ export const RecorderFlow = () => {
               {activeTab === 'coach' ? (
                 <>
                   <div className="text-xs font-bold text-indigo-800 tracking-wider uppercase mb-4">Feedback</div>
-                  {renderAiTip(analysisData.aiTip)}
+                  {renderAiTip(analysisData, profile, navigate)}
                 </>
               ) : (
                 <>

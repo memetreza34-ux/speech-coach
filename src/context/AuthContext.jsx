@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
           age: '',
           hobbies: '',
           isPremium: false,
+          customModes: [],
           createdAt: new Date().toISOString()
         };
         await setDoc(docRef, newProfile);

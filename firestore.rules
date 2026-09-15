@@ -4,7 +4,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId && 
-                    (!request.resource.data.keys().hasAny(['isPremium', 'customModes']) || (request.resource.data.isPremium == false && request.resource.data.customModes == []));
+                    (!request.resource.data.keys().hasAll(['isPremium']) || request.resource.data.isPremium == false) &&
+                    (!request.resource.data.keys().hasAll(['customModes']) || request.resource.data.customModes == []);
       // Prevent users from modifying premium status or customModes via the client SDK
       allow update: if request.auth != null && request.auth.uid == userId && 
                     (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium', 'customModes']));

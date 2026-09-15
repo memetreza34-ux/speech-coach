@@ -3,7 +3,7 @@ import { auth } from '../lib/firebase';
 export const getPacingStatus = (wpm) => {
   if (wpm < 110) return "Zu langsam";
   if (wpm > 160) return "Zu schnell";
-  return "Perfekt";
+  return "Im Zielbereich";
 };
 
 export const countWords = (transcript) => (transcript.trim().match(/\S+/g) || []).length;
@@ -23,7 +23,8 @@ export const CATEGORIES = [
   { id: 'languages', title: 'Fremdsprachen' }
 ];
 
-export { MODES } from '../shared/modes.js';
+import { MODES } from '../shared/modes.js';
+export { MODES };
 
 export const DAILY_CHALLENGES = [
   { id: 'daily', title: 'Ohne "Ähm"', desc: 'Erkläre ein komplexes Thema in unter 60 Sekunden ohne Füllwörter.', prompt: 'Erkläre einem 10-Jährigen, wie das Internet funktioniert. Rede 60 Sekunden lang ohne "ähm" oder "also".' },
@@ -93,6 +94,7 @@ export const getSessionDate = (session) => {
 };
 
 export const computeStreak = (history) => {
+  if (!Array.isArray(history)) return 0;
   const daySet = new Set(history.map(h => getSessionDate(h).toDateString()));
   let streak = 0;
   
@@ -116,7 +118,10 @@ export const computeStreak = (history) => {
   return streak;
 };
 
-export const computeLevel = (history) => Math.min(99, Math.floor(history.length / 3) + 1);
+export const computeLevel = (history) => {
+  if (!Array.isArray(history)) return 1;
+  return Math.min(99, Math.floor(history.length / 3) + 1);
+};
 
 export const analyzeTranscript = async (recording, mode, profile) => {
   const { transcript, durationMs, pauseCount, longestPauseMs, speakingRatio, dynamics, frames } = recording;
@@ -135,7 +140,7 @@ export const analyzeTranscript = async (recording, mode, profile) => {
   };
   measured.pacingStatus = getPacingStatus(measured.wpm);
 
-  const fallback = (aiTip) => ({ ...measured, fillers: countFillers(transcript), confidenceScore: null, aiTip, isDummy: true });
+  const fallback = (aiTip, isQuotaError = false) => ({ ...measured, fillers: countFillers(transcript), confidenceScore: null, aiTip, isDummy: true, isQuotaError });
 
   if (!transcript.trim()) {
     return fallback("Es wurde kein Text erkannt. Sprich etwas lauter oder prüfe dein Mikrofon.");
@@ -152,6 +157,9 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     if (!response.ok) {
       const errBody = await response.json().catch(() => null);
       console.error("Analyse-Server Fehler:", response.status, errBody);
+      if (response.status === 429) {
+        return fallback("Dein tägliches KI-Limit ist erreicht.", true);
+      }
       const tip = response.status === 404
         ? "Kein Analyse-Server erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt."
         : (errBody?.error || "Die KI-Analyse ist fehlgeschlagen. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.");
@@ -159,7 +167,7 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     }
 
     const { fillers, confidenceScore, aiTip } = await response.json();
-    return { ...measured, fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), confidenceScore: confidenceScore || 0, aiTip };
+    return { ...measured, fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), confidenceScore: typeof confidenceScore === 'number' ? confidenceScore : null, aiTip };
   } catch (e) {
     console.error("AI Error:", e);
     return fallback("Der Analyse-Server ist nicht erreichbar. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.");

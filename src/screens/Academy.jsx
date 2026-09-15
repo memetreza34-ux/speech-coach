@@ -62,75 +62,77 @@ export const AcademyScreen = () => {
       initial={{ opacity: 0, y: 10 }} 
       animate={{ opacity: 1, y: 0 }}
     >
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-serif text-slate-900 mb-1">Akademie</h1>
-          <p className="text-sm text-slate-500 font-medium">Lerne die Theorie der Rhetorik.</p>
-        </div>
-      </div>
-
-      <div 
-        className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 mb-8 text-white shadow-md relative overflow-hidden cursor-pointer hover:shadow-lg transition-all"
-        onClick={() => {
-          setSelectedLesson(categories[0].lessons[4]);
-          setPlayingVideo(false);
-        }}
-      >
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <Star size={16} className="text-amber-300" />
-            <span className="text-xs font-bold tracking-widest uppercase text-indigo-100">Meisterklasse</span>
-          </div>
-          <h2 className="text-xl font-bold mb-2">Die Kunst des Storytellings</h2>
-          <p className="text-sm text-indigo-100 mb-4 line-clamp-2">Lerne, wie du mit einer packenden Einleitung das Publikum fesselst.</p>
-          <div className="bg-white/20 hover:bg-white text-white hover:text-indigo-700 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-full inline-flex items-center gap-2 transition-colors">
-            <PlayCircle size={16} /> Kurs Starten
+      <div className="max-w-md mx-auto w-full">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-serif text-slate-900 mb-1">Akademie</h1>
+            <p className="text-sm text-slate-500 font-medium">Lerne die Theorie der Rhetorik.</p>
           </div>
         </div>
-        <div className="absolute -right-8 -bottom-8 opacity-20">
-          <MessageSquare size={120} />
-        </div>
-      </div>
 
-      <div className="space-y-8">
-        {categories.map((cat, idx) => {
-          const Icon = cat.icon;
-          return (
-            <div key={idx}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${cat.bgColor} ${cat.color}`}>
-                  <Icon size={18} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800">{cat.title}</h3>
-              </div>
-              <div className="space-y-3">
-                {cat.lessons.map((lesson, lIdx) => (
-                  <button 
-                    key={lIdx} 
-                    onClick={() => {
-                      setSelectedLesson(lesson);
-                      setPlayingVideo(false);
-                    }}
-                    className="w-full bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between hover:border-indigo-300 hover:shadow-md transition-all shadow-sm group"
-                  >
-                    <div className="flex items-center gap-4 text-left">
-                      <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors shrink-0">
-                        {lesson.type === 'video' ? <PlayCircle size={18} /> : <BookOpen size={18} />}
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-800 mb-0.5">{lesson.title}</div>
-                        <div className="text-xs text-slate-500 font-medium">{lesson.duration} • {lesson.type === 'video' ? 'Video' : 'Artikel'}</div>
-                      </div>
-                    </div>
-                    <div className="w-6 h-6 rounded-full border-2 border-slate-100 flex items-center justify-center text-transparent group-hover:border-indigo-200 group-hover:text-indigo-500 transition-colors shrink-0">
-                      <ChevronLeft size={14} className="rotate-180" />
-                    </div>
-                  </button>
-                ))}
-              </div>
+        <div 
+          className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 mb-8 text-white shadow-md relative overflow-hidden cursor-pointer hover:shadow-lg transition-all"
+          onClick={() => {
+            setSelectedLesson(categories[0].lessons[4]);
+            setPlayingVideo(false);
+          }}
+        >
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-3">
+              <Star size={16} className="text-amber-300" />
+              <span className="text-xs font-bold tracking-widest uppercase text-indigo-100">Meisterklasse</span>
             </div>
-          );
-        })}
+            <h2 className="text-xl font-bold mb-2">Die Kunst des Storytellings</h2>
+            <p className="text-sm text-indigo-100 mb-4 line-clamp-2">Lerne, wie du mit einer packenden Einleitung das Publikum fesselst.</p>
+            <div className="bg-white/20 hover:bg-white text-white hover:text-indigo-700 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-full inline-flex items-center gap-2 transition-colors">
+              <PlayCircle size={16} /> Kurs Starten
+            </div>
+          </div>
+          <div className="absolute -right-8 -bottom-8 opacity-20">
+            <MessageSquare size={120} />
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          {categories.map((cat, idx) => {
+            const Icon = cat.icon;
+            return (
+              <div key={idx}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${cat.bgColor} ${cat.color}`}>
+                    <Icon size={18} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800">{cat.title}</h3>
+                </div>
+                <div className="space-y-3">
+                  {cat.lessons.map((lesson, lIdx) => (
+                    <button 
+                      key={lIdx} 
+                      onClick={() => {
+                        setSelectedLesson(lesson);
+                        setPlayingVideo(false);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between hover:border-indigo-300 hover:shadow-md transition-all shadow-sm group"
+                    >
+                      <div className="flex items-center gap-4 text-left">
+                        <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors shrink-0">
+                          {lesson.type === 'video' ? <PlayCircle size={18} /> : <BookOpen size={18} />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-800 mb-0.5">{lesson.title}</div>
+                          <div className="text-xs text-slate-500 font-medium">{lesson.duration} • {lesson.type === 'video' ? 'Video' : 'Artikel'}</div>
+                        </div>
+                      </div>
+                      <div className="w-6 h-6 rounded-full border-2 border-slate-100 flex items-center justify-center text-transparent group-hover:border-indigo-200 group-hover:text-indigo-500 transition-colors shrink-0">
+                        <ChevronLeft size={14} className="rotate-180" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Lesson Reader Modal */}

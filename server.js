@@ -37,9 +37,8 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
-async function startServer() {
+export function createApp() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
 
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -61,24 +60,43 @@ async function startServer() {
     return true;
   };
 
-  const checkQuota = async (uid, isPremium, type) => {
+  const consumeQuota = async (uid, isPremium, type) => {
     const today = new Date().toISOString().split('T')[0];
-    const docSnap = await db.collection('usage').doc(`${uid}_${today}`).get();
-    const usage = docSnap.exists ? docSnap.data() : { [type]: 0 };
+    const docRef = db.collection('users').doc(uid).collection('usage').doc(today);
     
     const limits = {
       analyze: isPremium ? parseInt(process.env.PRO_DAILY_ANALYSES || 50) : parseInt(process.env.FREE_DAILY_ANALYSES || 5),
+      interviewTurn: isPremium ? parseInt(process.env.PRO_DAILY_INTERVIEW_TURNS || 100) : 0,
+      progress: isPremium ? parseInt(process.env.PRO_DAILY_PROGRESS || 10) : parseInt(process.env.FREE_DAILY_PROGRESS || 2),
+      persona: isPremium ? parseInt(process.env.PRO_DAILY_PERSONA || 10) : parseInt(process.env.FREE_DAILY_PERSONA || 2),
     };
-    
-    return (usage[type] || 0) < (limits[type] || Infinity);
+    const maxLimit = limits[type] || Infinity;
+
+    return await db.runTransaction(async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      const usage = docSnap.exists ? docSnap.data()[type] || 0 : 0;
+      
+      if (usage >= maxLimit) {
+        return false;
+      }
+      
+      transaction.set(docRef, { [type]: usage + 1 }, { merge: true });
+      return true;
+    });
   };
 
-  const incrementQuota = async (uid, type) => {
+  const refundQuota = async (uid, type) => {
     const today = new Date().toISOString().split('T')[0];
-    await db.collection('usage').doc(`${uid}_${today}`).set(
-      { [type]: FieldValue.increment(1) }, 
-      { merge: true }
-    );
+    const docRef = db.collection('users').doc(uid).collection('usage').doc(today);
+    await db.runTransaction(async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (docSnap.exists) {
+        const usage = docSnap.data()[type] || 0;
+        if (usage > 0) {
+          transaction.set(docRef, { [type]: usage - 1 }, { merge: true });
+        }
+      }
+    });
   };
 
   app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
@@ -111,19 +129,19 @@ async function startServer() {
       const sessionsRef = db.collection('users').doc(uid).collection('sessions');
       await deleteCollectionInBatches(sessionsRef);
 
+      // Delete usage subcollection
+      const usageRef = db.collection('users').doc(uid).collection('usage');
+      await deleteCollectionInBatches(usageRef);
+
       // Delete user document
-      try {
-        await db.collection('users').doc(uid).delete();
-      } catch (e) {
-        console.warn('User document already deleted or failed:', e);
-      }
+      await db.collection('users').doc(uid).delete();
 
       // Delete Firebase Auth user
       try {
         await getAuth().deleteUser(uid);
       } catch (e) {
         if (e.code !== 'auth/user-not-found') {
-          console.warn('Auth user deletion failed:', e);
+          throw e;
         }
       }
 
@@ -162,24 +180,8 @@ async function startServer() {
       }
 
       const userDocRef = db.collection('users').doc(uid);
-      const userDoc = await userDocRef.get();
-      
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: 'Benutzer nicht gefunden.' });
-      }
-      
-      const data = userDoc.data();
-      const customModes = data.customModes || [];
-      const isPremium = data.isPremium === true;
-      
-      const maxModes = isPremium ? parseInt(process.env.PRO_CUSTOM_MODES || 20) : parseInt(process.env.FREE_CUSTOM_MODES || 1);
-      
-      if (customModes.length >= maxModes) {
-        return res.status(403).json({ error: `Limit für eigene Szenarien (${maxModes}) erreicht.` });
-      }
-      
       const newMode = {
-        id: `custom_${Date.now()}`,
+        id: `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         title: title.trim(),
         prompt: prompt.trim(),
         category: 'custom',
@@ -188,14 +190,69 @@ async function startServer() {
         icon: 'Zap'
       };
       
-      await userDocRef.update({
-        customModes: [...customModes, newMode]
+      await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userDocRef);
+        if (!userDoc.exists) {
+          throw new Error('Benutzer nicht gefunden.');
+        }
+        
+        const data = userDoc.data();
+        const customModes = data.customModes || [];
+        const isPremium = data.isPremium === true;
+        
+        const maxModes = isPremium ? parseInt(process.env.PRO_CUSTOM_MODES || 20) : parseInt(process.env.FREE_CUSTOM_MODES || 1);
+        
+        if (customModes.length >= maxModes) {
+          throw new Error(`Limit für eigene Szenarien (${maxModes}) erreicht.`);
+        }
+        
+        transaction.update(userDocRef, {
+          customModes: [...customModes, newMode]
+        });
       });
-      
+
       return res.status(200).json({ success: true, mode: newMode });
     } catch (e) {
-      console.error('Custom Mode Create Error:', e);
-      return res.status(500).json({ error: 'Fehler beim Erstellen des Szenarios.' });
+      console.error('Custom Mode Error:', e);
+      return res.status(e.message.includes('Limit') ? 403 : (e.message.includes('gefunden') ? 404 : 500)).json({ error: e.message || 'Interner Fehler.' });
+    }
+  });
+
+  // API Route for deleting Custom Modes
+  app.delete('/api/custom-modes/:id', async (req, res) => {
+    try {
+      const modeId = req.params.id;
+      const uid = req.user.uid;
+      
+      if (!modeId || typeof modeId !== 'string') {
+        return res.status(400).json({ error: 'Ungültige ID.' });
+      }
+
+      const userDocRef = db.collection('users').doc(uid);
+      
+      await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userDocRef);
+        if (!userDoc.exists) {
+          throw new Error('Benutzer nicht gefunden.');
+        }
+        
+        const data = userDoc.data();
+        const customModes = data.customModes || [];
+        const newModes = customModes.filter(m => m.id !== modeId);
+        
+        if (newModes.length === customModes.length) {
+          throw new Error('Szenario nicht gefunden.');
+        }
+        
+        transaction.update(userDocRef, {
+          customModes: newModes
+        });
+      });
+
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error('Custom Mode Delete Error:', e);
+      return res.status(e.message.includes('gefunden') ? 404 : 500).json({ error: e.message || 'Interner Fehler.' });
     }
   });
 
@@ -232,7 +289,7 @@ async function startServer() {
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
-    if (!(await checkQuota(req.user.uid, isPremium, 'analyze'))) {
+    if (!(await consumeQuota(req.user.uid, isPremium, 'analyze'))) {
       return res.status(429).json({ error: 'Tägliches Limit für KI-Analysen erreicht.' });
     }
 
@@ -246,6 +303,9 @@ async function startServer() {
 
     if (frames && (!Array.isArray(frames) || frames.length > 5)) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
+    }
+    if (frames && frames.length > 0 && !isPremium) {
+      return res.status(403).json({ error: 'Die Kamera-Analyse erfordert ein Premium-Abonnement.' });
     }
     if (frames) {
       let totalSize = 0;
@@ -394,7 +454,6 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
       }
 
-      await incrementQuota(req.user.uid, 'analyze');
       return res.status(200).json(parsed);
     } catch (e) {
       clearTimeout(timeout);
@@ -417,6 +476,10 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists || userDoc.data().isPremium !== true) {
       return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.' });
+    }
+
+    if (!(await consumeQuota(req.user.uid, true, 'interviewTurn'))) {
+      return res.status(429).json({ error: 'Tägliches Limit für Interview-Züge erreicht.' });
     }
 
     if (!Array.isArray(messages) || messages.length > 50) return res.status(400).json({ error: 'Messages ungültig oder zu lang.' });
@@ -550,31 +613,35 @@ WICHTIG: Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden S
     if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
 
     const { history, profile } = req.body || {};
-    if (!Array.isArray(history) || history.length === 0) {
-      return res.status(400).json({ error: 'Keine Historie vorhanden.' });
+    if (!Array.isArray(history) || history.length === 0 || history.length > 200) {
+      return res.status(400).json({ error: 'Keine Historie vorhanden oder zu lang.' });
+    }
+
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    if (!(await consumeQuota(req.user.uid, isPremium, 'progress'))) {
+      return res.status(429).json({ error: 'Tägliches Limit für Fortschrittsanalysen erreicht.' });
     }
 
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
     
     // Prepare history summary
-    const historySummary = history.slice(0, 20).map((session, i) => {
+    const historySummary = history.slice(0, 50).map((session, i) => {
       const date = new Date(session.date || session.timestamp || Date.now()).toLocaleDateString('de-DE');
-      return `Session ${i + 1} (${date}): Modus: ${session.mode || 'unbekannt'}, Dauer: ${session.durationMs || '?'}ms, WPM: ${session.wpm || '?'}, Füllwörter: ${session.fillers || '?'}, Confidence Score: ${session.confidenceScore || '?'}`;
+      return `Session ${i + 1} (${date}): Modus: ${session.mode || 'unbekannt'}, Dauer: ${session.durationMs || '?'}ms, WPM: ${session.wpm ?? '?'}, Füllwörter: ${session.fillers ?? '?'}, Confidence Score: ${session.confidenceScore ?? '?'}`;
     }).join('\n');
 
     const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Der Nutzer hat mich gebeten, seinen Langzeit-Fortschritt zu analysieren.
-Nutzer-Profil: Name: ${safeProfile.name || 'Nutzer'}, Rolle: ${safeProfile.role || ''}.
+Nutzer-Profil: Name: ${String(safeProfile.name || 'Nutzer').slice(0, 50)}, Rolle: ${String(safeProfile.role || '').slice(0, 50)}.
 
 Hier sind die letzten Trainings-Aufzeichnungen des Nutzers:
 ${historySummary}
 
 Bitte schreibe eine detaillierte, motivierende, aber sehr konkrete KI-Langzeitanalyse.
-Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter haben im Vergleich zu den ersten Sessions abgenommen").
+Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter haben im Vergleich zu den ersten Sessions abgenommen").`;
 
-Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüsseln zurück:
-"insight": "Eine motivierende Zusammenfassung des Fortschritts und der Entwicklung über Zeit (ca. 2-3 Sätze).",
-"strengths": ["Stärke 1", "Stärke 2"] (1-2 konkrete Stärken basierend auf den Daten),
-"improvements": ["Verbesserung 1", "Verbesserung 2"] (1-2 klare Schwächen oder Muster, an denen der Nutzer noch arbeiten muss).`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -582,9 +649,23 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        })
+          generationConfig: { 
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                insight: { type: 'STRING' },
+                strengths: { type: 'ARRAY', items: { type: 'STRING' } },
+                improvements: { type: 'ARRAY', items: { type: 'STRING' } }
+              },
+              required: ['insight', 'strengths', 'improvements']
+            }
+          }
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen.' });
@@ -597,8 +678,16 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
       }
 
       const parsed = JSON.parse(resultText);
+      if (typeof parsed.insight !== 'string' || !Array.isArray(parsed.strengths) || !Array.isArray(parsed.improvements)) {
+         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch' });
+      }
+
       return res.status(200).json(parsed);
     } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+      }
       console.error('AI Error (Progress):', e);
       return res.status(500).json({ error: 'Interner Fehler bei der Langzeitanalyse.' });
     }
@@ -616,16 +705,24 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
       return res.status(400).json({ error: 'Bitte fülle zuerst dein Profil aus.' });
     }
 
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    if (!(await consumeQuota(req.user.uid, isPremium, 'persona'))) {
+      return res.status(429).json({ error: 'Tägliches Limit für Persona-Analysen erreicht.' });
+    }
+
+    const name = String(safeProfile.name || 'Nutzer').slice(0, 50);
+    const age = String(safeProfile.age || 'unbekannt').slice(0, 10);
+    const role = String(safeProfile.role || 'unbekannt').slice(0, 100);
+    const hobbies = String(safeProfile.hobbies || 'unbekannt').slice(0, 200);
+
     const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Analysiere das Profil des Nutzers und erstelle eine "Kommunikations-Identität" (Persona).
-Profil: Name: ${safeProfile.name || 'Nutzer'}, Alter: ${safeProfile.age || 'unbekannt'}, Rolle/Beruf: ${safeProfile.role || 'unbekannt'}, Interessen: ${safeProfile.hobbies || 'unbekannt'}.
+Profil: Name: ${name}, Alter: ${age}, Rolle/Beruf: ${role}, Interessen: ${hobbies}.
 
-Welcher Kommunikationstyp (Archetyp) passt zu dieser Person aufgrund ihres Berufs und ihrer Interessen? Welche rhetorischen Stärken sollte sie ausspielen und welche versteckten Fallen gibt es für sie?
+Welcher Kommunikationstyp (Archetyp) passt zu dieser Person aufgrund ihres Berufs und ihrer Interessen? Welche rhetorischen Stärken sollte sie ausspielen und welche versteckten Fallen gibt es für sie?`;
 
-Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüsseln zurück:
-"archetype": "Ein cooler, passender Name für diesen Kommunikationstyp (z.B. 'Der pragmatische Visionär' oder 'Die empathische Analytikerin')",
-"description": "Eine motivierende Beschreibung, wie dieser Typ idealerweise kommuniziert und warum das anhand des Profils so ist (2-3 Sätze).",
-"superpower": "Die rhetorische Superkraft dieses Typs (1 Satz).",
-"trap": "Die größte Kommunikationsfalle für diesen Typ (1 Satz)."`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -633,9 +730,24 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        })
+          generationConfig: { 
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                archetype: { type: 'STRING' },
+                description: { type: 'STRING' },
+                superpower: { type: 'STRING' },
+                trap: { type: 'STRING' }
+              },
+              required: ['archetype', 'description', 'superpower', 'trap']
+            }
+          }
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen.' });
@@ -648,12 +760,27 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
       }
 
       const parsed = JSON.parse(resultText);
+      if (typeof parsed.archetype !== 'string' || typeof parsed.description !== 'string' || typeof parsed.superpower !== 'string' || typeof parsed.trap !== 'string') {
+        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch' });
+      }
+
       return res.status(200).json(parsed);
     } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+      }
       console.error('AI Error (Persona):', e);
       return res.status(500).json({ error: 'Interner Fehler bei der Persona-Analyse.' });
     }
   });
+
+  return app;
+}
+
+export async function startServer() {
+  const app = createApp();
+  const PORT = process.env.PORT || 3000;
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -676,4 +803,7 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown) mit folgenden Schlüssel
   });
 }
 
-startServer();
+// Start server if script is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer();
+}

@@ -2,9 +2,23 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export const LoginScreen = () => {
   const { loginWithGoogle } = useAuth();
+  const { showToast } = useToast();
+
+  const handleLogin = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (e) {
+      if (e.code === 'auth/popup-closed-by-user') {
+        // user aborted, ignore
+        return;
+      }
+      showToast('Anmeldung fehlgeschlagen. Bitte versuche es erneut.', 'error');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center px-6 py-12 relative overflow-hidden">
@@ -25,7 +39,7 @@ export const LoginScreen = () => {
         <div className="w-full space-y-4">
           <motion.button 
             whileTap={{ scale: 0.98 }}
-            onClick={loginWithGoogle}
+            onClick={handleLogin}
             className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 shadow-sm text-slate-700 py-4 rounded-xl font-medium hover:bg-slate-50 transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
