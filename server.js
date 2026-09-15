@@ -337,10 +337,16 @@ export function createApp() {
     if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert (GEMINI_API_KEY fehlt).' });
 
     const { transcript, mode, profile, metrics, customPrompt, frames } = req.body || {};
+    const hasFrames = Array.isArray(frames) && frames.length > 0;
+    let safeCustomPrompt = undefined;
+    if (customPrompt !== undefined) {
+      if (typeof customPrompt === 'string') safeCustomPrompt = customPrompt.trim().slice(0, 1500);
+      else return res.status(400).json({ error: 'customPrompt muss ein String sein.', code: 'INVALID_REQUEST' });
+    }
     
     // Server-side Premium Check
     if (!(await verifyPremiumMode(req, res, mode))) {
-      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.' });
+      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
     }
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
@@ -350,11 +356,11 @@ export function createApp() {
     if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
-    if (frames && (!Array.isArray(frames) || frames.length > 5)) {
+    if (hasFrames && frames.length > 5) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
     }
-    if (frames) {
-      if (!isPremium) return res.status(403).json({ error: 'Kamera-Feedback erfordert ein Premium-Abonnement.' });
+    if (hasFrames) {
+      if (!isPremium) return res.status(403).json({ error: 'Kamera-Feedback erfordert ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
       let totalSize = 0;
       for (const frame of frames) {
         if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) return res.status(400).json({ error: 'Ungültiges Frame-Format.' });
@@ -382,7 +388,7 @@ export function createApp() {
 
     // CONSUME QUOTA AFTER ALL VALIDATIONS
     if (!(await consumeQuota(req.user.uid, isPremium, 'analyze'))) {
-      return res.status(429).json({ error: 'Tägliches Limit für Aufnahmen erreicht.' });
+      return res.status(429).json({ error: 'Tägliches Limit erreicht.', code: 'QUOTA_EXCEEDED' });
     }
 
     const wpm = m.wpm ?? '?';
@@ -392,7 +398,7 @@ export function createApp() {
     const dynamics = m.dynamics ?? '?';
     const pacingStatus = typeof m.pacingStatus === 'string' ? m.pacingStatus.slice(0, 20) : '?';
     
-    const contextPrompt = typeof customPrompt === 'string' ? `Das Szenario ist: "${customPrompt.slice(0, 1500)}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
+    const contextPrompt = safeCustomPrompt ? `Das Szenario ist: "${safeCustomPrompt}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
 
     const promptText = `Du bist ein professioneller Kommunikationstrainer. Analysiere den folgenden Sprech-Versuch eines Nutzers.
 Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.
@@ -406,7 +412,7 @@ Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst si
 
 Transkript: "${safeTranscript}"
 
-${frames && frames.length > 0 ? "Du erhältst zusätzlich Einzelbilder aus der Webcam des Nutzers während des Sprechens. Beurteile anhand dieser Bilder Körpersprache, Gestik und Blickkontakt (Wirkt die Person offen? Schaut sie in die Kamera?)." : "Keine Videobilder verfügbar."}
+${hasFrames ? "Du erhältst zusätzlich Einzelbilder aus der Webcam des Nutzers während des Sprechens. Beurteile anhand dieser Bilder Körpersprache, Gestik und Blickkontakt (Wirkt die Person offen? Schaut sie in die Kamera?)." : "Keine Videobilder verfügbar."}
 
 Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgenden Schlüsseln zurück:
 "fillers": (Anzahl der Füllwörter im Transkript als Zahl, z.B. "also", "halt", "quasi", "irgendwie", min 0),
@@ -416,12 +422,12 @@ Gib DEINE ANTWORT EXAKT als JSON-Objekt (ohne Markdown-Formatierung) mit folgend
   "strengths": "Was lief gut? (Inhaltlich oder anhand der Messwerte, 1-2 Sätze)",
   "improvements": "Detailliertes Verbesserungspotenzial (Inhalt, Struktur, schwache Wörter oder anhand der Messwerte, 2-3 Sätze)",
   "actionTip": "Konkreter Tipp für das nächste Mal (1 Satz, sprich den Nutzer direkt an)",
-  "bodyLanguage": ${frames && frames.length > 0 ? '"Kurzes Feedback zur Körpersprache anhand der Bilder (1-2 Sätze)"' : 'null'}
+  "bodyLanguage": ${hasFrames ? '"Kurzes Feedback zur Körpersprache anhand der Bilder (1-2 Sätze)"' : 'null'}
 }
 Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
     const parts = [{ text: promptText }];
-    if (frames && Array.isArray(frames)) {
+    if (hasFrames) {
       frames.forEach(imgBase64 => {
         const data = imgBase64.replace(/^data:image\/\w+;base64,/, "");
         parts.push({
@@ -468,14 +474,14 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
       if (!response.ok) {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).' });
+        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).', code: 'INVALID_AI_RESPONSE' });
       }
 
       let parsed;
@@ -483,41 +489,41 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
         parsed = JSON.parse(resultText);
       } catch (e) {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
       }
       
       // Strict Output Validation
       if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'fillers missing or invalid' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'fillers missing or invalid' });
       }
       if (parsed.confidenceScore !== null && (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100)) {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'confidenceScore invalid' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'confidenceScore invalid' });
       }
       if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'aiTip missing or invalid' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'aiTip missing or invalid' });
       }
       if (typeof parsed.aiTip.summary !== 'string') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'summary missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'summary missing' });
       }
       if (typeof parsed.aiTip.strengths !== 'string') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
       }
       if (typeof parsed.aiTip.improvements !== 'string') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
       }
       if (typeof parsed.aiTip.actionTip !== 'string') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
       }
       if (parsed.aiTip.bodyLanguage !== null && parsed.aiTip.bodyLanguage !== undefined && typeof parsed.aiTip.bodyLanguage !== 'string') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
       }
 
       return res.status(200).json(parsed);
@@ -525,7 +531,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
         await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
       }
       console.error('AI Error:', e);
       await safeRefundQuota(req.user.uid, 'analyze');
@@ -539,11 +545,17 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
 
     const { messages, profile, customPrompt, frames } = req.body || {};
+    const hasFrames = Array.isArray(frames) && frames.length > 0;
+    let safeCustomPrompt = undefined;
+    if (customPrompt !== undefined) {
+      if (typeof customPrompt === 'string') safeCustomPrompt = customPrompt.trim().slice(0, 1500);
+      else return res.status(400).json({ error: 'customPrompt muss ein String sein.', code: 'INVALID_REQUEST' });
+    }
     
     // Server-side Premium Check
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     if (!userDoc.exists || userDoc.data().isPremium !== true) {
-      return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.' });
+      return res.status(403).json({ error: 'Live-Interviews erfordern ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
     }
 
     // VALIDATION BEFORE QUOTA
@@ -554,10 +566,10 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       if (typeof msg.text !== 'string' || msg.text.length > 2000) return res.status(400).json({ error: 'Ungültiger text.' });
     }
 
-    if (frames && (!Array.isArray(frames) || frames.length > 5)) {
+    if (hasFrames && frames.length > 5) {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
     }
-    if (frames) {
+    if (hasFrames) {
       let totalSize = 0;
       for (const frame of frames) {
         if (typeof frame !== 'string' || !frame.startsWith('data:image/jpeg;base64,')) {
@@ -571,7 +583,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
 
     // CONSUME QUOTA AFTER ALL VALIDATIONS
     if (!(await consumeQuota(req.user.uid, true, 'interviewTurn'))) {
-      return res.status(429).json({ error: 'Tägliches Limit für Interview-Züge erreicht.' });
+      return res.status(429).json({ error: 'Tägliches Limit erreicht.', code: 'QUOTA_EXCEEDED' });
     }
 
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
@@ -580,7 +592,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
     const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
 
-    const contextPrompt = customPrompt && typeof customPrompt === 'string' ? `Interview-Szenario: "${customPrompt.slice(0, 1500)}"` : `Bewerbungsgespräch.`;
+    const contextPrompt = safeCustomPrompt ? `Interview-Szenario: "${safeCustomPrompt}"` : `Bewerbungsgespräch.`;
 
     const systemInstruction = `Du bist ein professioneller, empathischer aber anspruchsvoller Interviewer für folgendes Szenario:
 ${contextPrompt}
@@ -606,7 +618,7 @@ Gib immer strikt dieses JSON Format zurück:
       parts: [{ text: m.text }]
     }));
 
-    if (frames && frames.length > 0) {
+    if (hasFrames) {
       const lastMessage = formattedMessages[formattedMessages.length - 1];
       if (lastMessage.role === 'user') {
         frames.forEach(imgBase64 => {
@@ -647,14 +659,14 @@ Gib immer strikt dieses JSON Format zurück:
 
       if (!response.ok) {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
+        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
       }
 
       let parsed;
@@ -662,21 +674,21 @@ Gib immer strikt dieses JSON Format zurück:
         parsed = JSON.parse(resultText);
       } catch (e) {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
       }
 
       // Validate output
       if (typeof parsed.interviewerSpeech !== 'string' || !parsed.interviewerSpeech.trim()) {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'interviewerSpeech missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'interviewerSpeech missing' });
       }
       if (typeof parsed.feedback !== 'string') {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'feedback missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'feedback missing' });
       }
       if (typeof parsed.isFinished !== 'boolean') {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'isFinished missing' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'isFinished missing' });
       }
 
       return res.status(200).json(parsed);
@@ -684,7 +696,7 @@ Gib immer strikt dieses JSON Format zurück:
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
         await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
       }
       console.error('AI Error (Interview):', e);
       await safeRefundQuota(req.user.uid, 'interviewTurn');
@@ -715,7 +727,7 @@ Gib immer strikt dieses JSON Format zurück:
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
     
     if (!(await consumeQuota(req.user.uid, isPremium, 'progress'))) {
-      return res.status(429).json({ error: 'Tägliches Limit für Fortschrittsanalysen erreicht.' });
+      return res.status(429).json({ error: 'Tägliches Limit erreicht.', code: 'QUOTA_EXCEEDED' });
     }
 
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
@@ -770,14 +782,14 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
 
       if (!response.ok) {
         await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
         await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
+        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
       }
 
       let parsed;
@@ -785,7 +797,7 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
         parsed = JSON.parse(resultText);
       } catch (e) {
         await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
       }
       
       // Strict Array Check
@@ -793,15 +805,15 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
 
       if (typeof parsed.insight !== 'string' || !parsed.insight.trim() || parsed.insight.length > 2000) {
          await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid insight' });
+         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid insight' });
       }
       if (!isStringArray(parsed.strengths)) {
          await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid strengths' });
+         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid strengths' });
       }
       if (!isStringArray(parsed.improvements)) {
          await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'invalid improvements' });
+         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid improvements' });
       }
 
       return res.status(200).json(parsed);
@@ -809,7 +821,7 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
         await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
       }
       console.error('AI Error (Progress):', e);
       await safeRefundQuota(req.user.uid, 'progress');
@@ -833,7 +845,7 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
     
     if (!(await consumeQuota(req.user.uid, isPremium, 'persona'))) {
-      return res.status(429).json({ error: 'Tägliches Limit für Persona-Analysen erreicht.' });
+      return res.status(429).json({ error: 'Tägliches Limit erreicht.', code: 'QUOTA_EXCEEDED' });
     }
 
     const promptText = `Analysiere das Profil dieses Nutzers und erstelle ein humorvolles, aber zutreffendes "Speaker-Archetyp" Profil.
@@ -878,14 +890,14 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
       if (!response.ok) {
         await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).' });
+        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
       }
 
       const data = await response.json();
       const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!resultText) {
         await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.' });
+        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
       }
 
       let parsed;
@@ -893,14 +905,14 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
         parsed = JSON.parse(resultText);
       } catch (e) {
         await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
       }
 
       const isValidString = (s) => typeof s === 'string' && s.trim() !== '' && s.length < 500;
       
       if (!isValidString(parsed.archetype) || !isValidString(parsed.description) || !isValidString(parsed.superpower) || !isValidString(parsed.trap)) {
         await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'INVALID_AI_RESPONSE', details: 'Schema mismatch or fields too long/empty' });
+        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Schema mismatch or fields too long/empty' });
       }
 
       return res.status(200).json(parsed);
@@ -908,7 +920,7 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
       clearTimeout(timeout);
       if (e.name === 'AbortError') {
         await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.' });
+        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
       }
       console.error('AI Error (Persona):', e);
       await safeRefundQuota(req.user.uid, 'persona');

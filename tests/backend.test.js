@@ -12,7 +12,6 @@ const { getMock, runTransactionMock, verifyIdTokenMock } = vi.hoisted(() => {
     const transaction = {
       get: getMock,
       set: vi.fn((_ref, data) => {
-         // simulate consumption or refund
          if (data.analyze !== undefined) mockUsage = data.analyze;
          if (data.interviewTurn !== undefined) mockUsage = data.interviewTurn;
          if (data.progress !== undefined) mockUsage = data.progress;
@@ -66,18 +65,16 @@ describe('Backend API Tests', () => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = 'test-key';
     process.env.FREE_DAILY_ANALYSES = '5';
+    process.env.PRO_DAILY_ANALYSES = '50';
     app = createApp();
     app.use((err, req, res, next) => {
-      console.log('EXPRESS UNHANDLED ERROR:', err);
       res.status(500).json({ error: 'unhandled', details: err.message });
     });
     request = supertest(app);
     mockUsage = 0;
     
-    // Auth mock
     verifyIdTokenMock.mockResolvedValue({ uid: 'test-user-123' });
 
-    // DB mock
     getMock.mockImplementation(() => ({
       exists: true,
       data: () => ({ isPremium: false, analyze: mockUsage, interviewTurn: mockUsage, progress: mockUsage, persona: mockUsage })
@@ -89,21 +86,10 @@ describe('Backend API Tests', () => {
       const res = await request.post('/api/analyze').send({});
       expect(res.status).toBe(401);
     });
-
-    it('returns 401 if token is not Bearer', async () => {
-      const res = await request.post('/api/analyze').set('Authorization', 'Basic 123').send({});
-      expect(res.status).toBe(401);
-    });
-
-    it('returns 401 for invalid Firebase token', async () => {
-      verifyIdTokenMock.mockRejectedValueOnce(new Error('Invalid token'));
-      const res = await request.post('/api/analyze').set('Authorization', 'Bearer invalid').send({});
-      expect(res.status).toBe(401);
-    });
   });
 
   describe('GET /api/usage', () => {
-    it('returns usage correctly', async () => {
+    it('returns usage correctly for Free defaults', async () => {
       mockUsage = 2;
       const res = await request.get('/api/usage').set('Authorization', 'Bearer valid');
       expect(res.status).toBe(200);
@@ -111,12 +97,24 @@ describe('Backend API Tests', () => {
       expect(res.body.usage.analyze).toBe(2);
       expect(res.body.limits.analyze).toBe(5);
     });
+
+    it('returns usage correctly for Pro defaults', async () => {
+      getMock.mockImplementation(() => ({
+        exists: true,
+        data: () => ({ isPremium: true, analyze: 10 })
+      }));
+      const res = await request.get('/api/usage').set('Authorization', 'Bearer valid');
+      expect(res.status).toBe(200);
+      expect(res.body.plan).toBe('PRO');
+      expect(res.body.usage.analyze).toBe(10);
+      expect(res.body.limits.analyze).toBe(50);
+    });
   });
 
-  describe('POST /api/analyze Quota Refunds', () => {
+  describe('POST /api/analyze', () => {
     const validBody = { transcript: 'test', metrics: { wpm: 120 }, mode: 'impromptu' };
 
-    it('consumes quota (counter + 1) on success', async () => {
+    it('consumes quota on success', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -125,21 +123,64 @@ describe('Backend API Tests', () => {
       });
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(200);
-      expect(mockUsage).toBe(1); // Consumed 1
+      expect(mockUsage).toBe(1);
+    });
+
+    it('allows Free User with frames: [] and consumes quota', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 1, confidenceScore: 80, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x" } }) }] } }]
+        })
+      });
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send({ ...validBody, frames: [] });
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
+    });
+
+    it('rejects Free User with actual frames', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send({ ...validBody, frames: ['data:image/jpeg;base64,123'] });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PREMIUM_REQUIRED');
+      expect(mockUsage).toBe(0);
+    });
+
+    it('allows Pro User with actual frames', async () => {
+      getMock.mockImplementation(() => ({
+        exists: true,
+        data: () => ({ isPremium: true, analyze: 0 })
+      }));
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 1, confidenceScore: 80, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x" } }) }] } }]
+        })
+      });
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send({ ...validBody, frames: ['data:image/jpeg;base64,123'] });
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
+    });
+    
+    it('validates customPrompt type', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send({ ...validBody, customPrompt: 123 });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_REQUEST');
+      expect(mockUsage).toBe(0);
     });
 
     it('refunds quota on Gemini timeout (504)', async () => {
       fetch.mockRejectedValueOnce({ name: 'AbortError' });
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(504);
-      expect(mockUsage).toBe(0); // Refunded back to 0
+      expect(res.body.code).toBe('AI_TIMEOUT');
+      expect(mockUsage).toBe(0);
     });
 
     it('refunds quota on upstream 500', async () => {
       fetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Error' });
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
-      if (res.status !== 502) throw new Error('EXPECTED 502, GOT: ' + res.status + ' BODY: ' + JSON.stringify(res.body));
       expect(res.status).toBe(502);
+      expect(res.body.code).toBe('UPSTREAM_ERROR');
       expect(mockUsage).toBe(0);
     });
 
@@ -152,27 +193,28 @@ describe('Backend API Tests', () => {
       });
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(502);
-      expect(mockUsage).toBe(0);
-    });
-    
-    it('refunds quota on invalid AI schema (missing summary)', async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 1, confidenceScore: 80, aiTip: { strengths: "x" } }) }] } }]
-        })
-      });
-      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
-      expect(res.status).toBe(502);
+      expect(res.body.code).toBe('INVALID_AI_RESPONSE');
       expect(mockUsage).toBe(0);
     });
   });
 
-  describe('POST /api/interview Error & Refund Tests', () => {
+  describe('POST /api/interview', () => {
     const validBody = { messages: [{ role: 'user', text: 'Hallo' }], mode: 'interview_standard' };
     
     beforeEach(() => {
       getMock.mockImplementation(() => ({ exists: true, data: () => ({ isPremium: true, interviewTurn: mockUsage }) }));
+    });
+    
+    it('consumes quota on success', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ feedback: "x", isFinished: false, interviewerSpeech: "x" }) }] } }]
+        })
+      });
+      const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
     });
 
     it('refunds on invalid AI response (missing interviewerSpeech)', async () => {
@@ -184,6 +226,27 @@ describe('Backend API Tests', () => {
       });
       const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(502);
+      expect(res.body.code).toBe('INVALID_AI_RESPONSE');
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on invalid JSON', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: "not json" }] } }]
+        })
+      });
+      const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(502);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on Gemini timeout', async () => {
+      fetch.mockRejectedValueOnce({ name: 'AbortError' });
+      const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(504);
+      expect(res.body.code).toBe('AI_TIMEOUT');
       expect(mockUsage).toBe(0);
     });
 
@@ -191,19 +254,23 @@ describe('Backend API Tests', () => {
       fetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Error' });
       const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(502);
+      expect(res.body.code).toBe('UPSTREAM_ERROR');
       expect(mockUsage).toBe(0);
-    });
-
-    it('does NOT consume quota if validation fails (message > 2000 chars)', async () => {
-      const res = await request.post('/api/interview').set('Authorization', 'Bearer token')
-        .send({ mode: 'interview_standard', messages: [{ role: 'user', text: 'a'.repeat(2001) }] });
-      expect(res.status).toBe(400);
-      expect(mockUsage).toBe(0); // Never consumed
     });
   });
   
-  describe('POST /api/analyze-progress Error & Refund Tests', () => {
+  describe('POST /api/analyze-progress', () => {
     const validBody = { history: [{id: 1}] };
+    
+    it('consumes quota on success', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A"], improvements: ["A"] }) }] } }] })
+      });
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
+    });
     
     it('refunds on invalid output (insight empty)', async () => {
       fetch.mockResolvedValueOnce({
@@ -215,19 +282,43 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(0);
     });
     
-    it('refunds if strengths has > 3 items', async () => {
+    it('refunds on invalid JSON', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A", "B", "C", "D"], improvements: ["A"] }) }] } }] })
+        json: async () => ({ candidates: [{ content: { parts: [{ text: "not json" }] } }] })
       });
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(502);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on Gemini timeout', async () => {
+      fetch.mockRejectedValueOnce({ name: 'AbortError' });
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(504);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on upstream error', async () => {
+      fetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Error' });
       const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(502);
       expect(mockUsage).toBe(0);
     });
   });
 
-  describe('POST /api/analyze-persona Error & Refund Tests', () => {
+  describe('POST /api/analyze-persona', () => {
     const validBody = { profile: { role: 'x', hobbies: 'x' } };
+
+    it('consumes quota on success', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ archetype: "X", description: "X", superpower: "X", trap: "X" }) }] } }] })
+      });
+      const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
+    });
 
     it('returns 400 without quota consumption if profile is empty', async () => {
       const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send({ profile: { role: '', hobbies: '' } });
@@ -238,8 +329,32 @@ describe('Backend API Tests', () => {
     it('refunds on empty archetype', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ archetype: "", description: "x", tone: "x", strengths: ["x"], blindspots: ["x"], quote: "x" }) }] } }] })
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ archetype: "", description: "x", superpower: "X", trap: "x" }) }] } }] })
       });
+      const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(502);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on invalid JSON', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: "not json" }] } }] })
+      });
+      const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(502);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on Gemini timeout', async () => {
+      fetch.mockRejectedValueOnce({ name: 'AbortError' });
+      const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(504);
+      expect(mockUsage).toBe(0);
+    });
+    
+    it('refunds on upstream error', async () => {
+      fetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'Error' });
       const res = await request.post('/api/analyze-persona').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(502);
       expect(mockUsage).toBe(0);

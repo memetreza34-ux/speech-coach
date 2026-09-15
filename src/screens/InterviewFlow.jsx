@@ -83,7 +83,7 @@ export default function InterviewFlow() {
           messages: chatHistory,
           profile,
           customPrompt: `${modeTitle(modeId)} - ${getPromptForMode(modeId)}`,
-          frames: frames.length > 0 ? frames : undefined
+          frames: frames?.length ? frames : undefined
         })
       });
             if (response.ok) {

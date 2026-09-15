@@ -68,7 +68,16 @@ export const PROMPTS = {
   panel: "Diskussionspartner fällt dir ins Wort: „Das ist doch völliger Unsinn, was Sie da sagen!“",
   lang_en: "Client: „We love the proposal, but the timeline seems very aggressive. Can we discuss this?“",
   lang_fr: "Serveur: „Bonjour! Que désirez-vous manger aujourd'hui?“",
-  lang_es: "Camarero: „¡Hola! ¿Qué van a tomar para cenar?“"
+  lang_es: "Camarero: „¡Hola! ¿Qué van a tomar para cenar?“",
+  conflict_resolution_interactive: "Du führst ein schwieriges Gespräch. Die KI ist ein Kollege, der extrem wütend ist, weil du angeblich seine Idee geklaut hast. Beruhige ihn und löse den Konflikt.",
+  conflict_resolution: "Du führst ein schwieriges Gespräch. Die KI ist ein Kollege, der extrem wütend ist, weil du angeblich seine Idee geklaut hast. Beruhige ihn und löse den Konflikt.",
+  storytelling: "Erzähle in 60 Sekunden eine fesselnde Geschichte aus deiner Jugend, die dein Leben geprägt hat. Nutze die Struktur der Heldenreise.",
+  feedback_review: "Dein Chef fragt: 'Wie schätzen Sie Ihre eigene Leistung im letzten Jahr ein?'",
+  smalltalk: "Du stehst auf einem Networking-Event am Buffet. Eine unbekannte Person stellt sich neben dich. Brich das Eis in 60 Sekunden.",
+  habit_pitch: "Erkläre deinem zukünftigen Ich, warum du ab heute jeden Tag 30 Minuten lesen wirst.",
+  townhall: "Du stehst vor der Belegschaft. Jemand ruft: 'Die Boni der Vorstände steigen, aber wir bekommen keine Gehaltserhöhung!' Antworte souverän.",
+  lang_it: "Cameriere: 'Buonasera! Avete già scelto il vino e la pasta?'",
+
 };
 
 export const getPromptForMode = (id) => {
@@ -80,6 +89,7 @@ export const getLocaleForMode = (id) => {
   if (id === 'lang_en') return 'en-US';
   if (id === 'lang_fr') return 'fr-FR';
   if (id === 'lang_es') return 'es-ES';
+  if (id === 'lang_it') return 'it-IT';
   return 'de-DE';
 };
 
@@ -160,7 +170,7 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ transcript, mode, profile, metrics: measured, customPrompt: promptContext, frames })
+      body: JSON.stringify({ transcript, mode, profile, metrics: measured, customPrompt: promptContext, frames: frames?.length ? frames : undefined })
     });
 
     if (!response.ok) {
