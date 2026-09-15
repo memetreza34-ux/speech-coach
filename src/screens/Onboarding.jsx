@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Target, TrendingUp, Users, Sparkles, Loader2, Check } from 'lucide-react';
+import { Target, TrendingUp, Users, Loader2 } from 'lucide-react';
 
 export const OnboardingScreen = () => {
   const { updateProfile, profile } = useAuth();

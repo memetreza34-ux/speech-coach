@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MODES as PREMIUM_MODES_CONFIG } from './src/shared/modes.js';
@@ -63,6 +63,7 @@ export function createApp() {
   const getPositiveIntEnv = (name, fallback, options = { allowZero: false }) => {
     const val = process.env[name];
     if (val === undefined || val === '') return fallback;
+    if (!/^[0-9]+$/.test(val)) return fallback;
     const parsed = parseInt(val, 10);
     if (isNaN(parsed)) return fallback;
     if (parsed < 0) return fallback;
@@ -70,18 +71,21 @@ export function createApp() {
     return parsed;
   };
 
+  const getQuotaLimits = (isPremium) => ({
+    analyze: isPremium ? getPositiveIntEnv('PRO_DAILY_ANALYSES', 50) : getPositiveIntEnv('FREE_DAILY_ANALYSES', 5),
+    interviewTurn: isPremium ? getPositiveIntEnv('PRO_DAILY_INTERVIEW_TURNS', 100) : getPositiveIntEnv('FREE_DAILY_INTERVIEW_TURNS', 0, { allowZero: true }),
+    progress: isPremium ? getPositiveIntEnv('PRO_DAILY_PROGRESS', 10) : getPositiveIntEnv('FREE_DAILY_PROGRESS', 2),
+    persona: isPremium ? getPositiveIntEnv('PRO_DAILY_PERSONA', 10) : getPositiveIntEnv('FREE_DAILY_PERSONA', 2),
+    customModes: isPremium ? getPositiveIntEnv('PRO_CUSTOM_MODES', 20) : getPositiveIntEnv('FREE_CUSTOM_MODES', 1)
+  });
+
   // Quota Reset Documention: Quotas reset at 00:00 UTC.
   // A simple ISO string date is used to represent 'today'.
   const consumeQuota = async (uid, isPremium, type) => {
     const today = new Date().toISOString().split('T')[0];
     const docRef = db.collection('users').doc(uid).collection('usage').doc(today);
     
-    const limits = {
-      analyze: isPremium ? getPositiveIntEnv('PRO_DAILY_ANALYSES', 50) : getPositiveIntEnv('FREE_DAILY_ANALYSES', 5),
-      interviewTurn: isPremium ? getPositiveIntEnv('PRO_DAILY_INTERVIEW_TURNS', 100) : getPositiveIntEnv('FREE_DAILY_INTERVIEW_TURNS', 0, { allowZero: true }),
-      progress: isPremium ? getPositiveIntEnv('PRO_DAILY_PROGRESS', 10) : getPositiveIntEnv('FREE_DAILY_PROGRESS', 2),
-      persona: isPremium ? getPositiveIntEnv('PRO_DAILY_PERSONA', 10) : getPositiveIntEnv('FREE_DAILY_PERSONA', 2),
-    };
+    const limits = getQuotaLimits(isPremium);
     
     if (!(type in limits)) {
       throw new Error(`Unknown quota type: ${type}`);
@@ -138,13 +142,7 @@ export function createApp() {
       const isPremium = userDoc.exists && userDoc.data().isPremium === true;
       const customModesCount = userDoc.exists ? (userDoc.data().customModes || []).length : 0;
       
-      const limits = {
-        analyze: isPremium ? getPositiveIntEnv('PRO_DAILY_ANALYZE', 25) : getPositiveIntEnv('FREE_DAILY_ANALYZE', 5),
-        interviewTurn: isPremium ? getPositiveIntEnv('PRO_DAILY_INTERVIEW_TURNS', 50) : 0,
-        progress: isPremium ? getPositiveIntEnv('PRO_DAILY_PROGRESS', 5) : getPositiveIntEnv('FREE_DAILY_PROGRESS', 1),
-        persona: isPremium ? getPositiveIntEnv('PRO_DAILY_PERSONA', 10) : getPositiveIntEnv('FREE_DAILY_PERSONA', 2),
-        customModes: isPremium ? getPositiveIntEnv('PRO_CUSTOM_MODES', 20) : getPositiveIntEnv('FREE_CUSTOM_MODES', 1)
-      };
+      const limits = getQuotaLimits(isPremium);
 
       const today = new Date().toISOString().split('T')[0];
       const usageDoc = await db.collection('users').doc(req.user.uid).collection('usage').doc(today).get();
@@ -152,6 +150,7 @@ export function createApp() {
 
       return res.status(200).json({
         plan: isPremium ? 'PRO' : 'FREE',
+        reset: '00:00 UTC',
         usage: {
           analyze: usage.analyze || 0,
           interviewTurn: usage.interviewTurn || 0,
@@ -260,7 +259,7 @@ export function createApp() {
         const customModes = data.customModes || [];
         const isPremium = data.isPremium === true;
         
-        const maxModes = isPremium ? getPositiveIntEnv('PRO_CUSTOM_MODES', 20) : getPositiveIntEnv('FREE_CUSTOM_MODES', 1);
+        const maxModes = getQuotaLimits(isPremium).customModes;
         
         if (customModes.length >= maxModes) {
           throw new Error(`Limit für eigene Szenarien (${maxModes}) erreicht.`);
@@ -539,7 +538,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
 
-    const { mode, messages, profile, customPrompt, frames } = req.body || {};
+    const { messages, profile, customPrompt, frames } = req.body || {};
     
     // Server-side Premium Check
     const userDoc = await db.collection('users').doc(req.user.uid).get();
@@ -922,7 +921,7 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
 export async function startServer() {
   const app = createApp();
-  const PORT = process.env.PORT || 3000;
+  const PORT = 3000;
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

@@ -1,17 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import supertest from 'supertest';
 import { createApp } from '../server.js';
-import * as admin from 'firebase-admin';
 
-// Reusing same mock strategy
-let transactionCount = 0;
 let currentUsage = 0;
 
-const { getMock, setMock, runTransactionMock } = vi.hoisted(() => {
+const { getMock, runTransactionMock } = vi.hoisted(() => {
   const getMock = vi.fn();
-  const setMock = vi.fn();
   const runTransactionMock = vi.fn(async (cb) => {
-    // Basic simulation of transaction loop locking (not perfectly accurate to firestore but counts)
     const transaction = {
       get: async () => ({ exists: true, data: () => ({ analyze: currentUsage }) }),
       set: (ref, data) => { currentUsage = data.analyze; },
@@ -19,7 +14,7 @@ const { getMock, setMock, runTransactionMock } = vi.hoisted(() => {
     };
     return cb(transaction);
   });
-  return { getMock, setMock, runTransactionMock };
+  return { getMock, runTransactionMock };
 });
 
 vi.mock('firebase-admin/app', () => ({
@@ -44,15 +39,10 @@ vi.mock('firebase-admin/firestore', () => {
     getFirestore: vi.fn(() => ({
       collection: collectionMock,
       runTransaction: runTransactionMock,
-    })),
-    FieldValue: {
-      serverTimestamp: vi.fn(),
-    }
+    }))
   };
 });
 
-// Mock fetch for Gemini API
-const globalFetch = global.fetch;
 vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({
@@ -60,7 +50,7 @@ vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         content: { parts: [{ text: JSON.stringify({ fillers: 1, confidenceScore: 80, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x", bodyLanguage: null } }) }] }
       }]
     })
-  }));
+}));
 
 describe('Concurrency Tests', () => {
   let app;
@@ -69,7 +59,7 @@ describe('Concurrency Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = 'test-key';
-    process.env.FREE_DAILY_ANALYZE = '5';
+    process.env.FREE_DAILY_ANALYSES = '3';
     currentUsage = 0;
     app = createApp();
     request = supertest(app);
@@ -77,7 +67,6 @@ describe('Concurrency Tests', () => {
   });
 
   it('handles parallel requests without exceeding quota limit', async () => {
-    // 10 concurrent requests
     const promises = [];
     for (let i = 0; i < 10; i++) {
       promises.push(
@@ -89,12 +78,12 @@ describe('Concurrency Tests', () => {
     
     const results = await Promise.all(promises);
     
-    // We mocked the transaction simply, so it processes sequentially in the mock
-    // In reality Firestore would handle race conditions. We just check how many succeed.
-    const successes = results.filter(r => r.status !== 429);
+    const successes = results.filter(r => r.status === 200);
     const ratelimited = results.filter(r => r.status === 429);
+    const others = results.filter(r => r.status !== 200 && r.status !== 429);
     
-    expect(successes.length).toBeLessThanOrEqual(5);
-    expect(ratelimited.length).toBeGreaterThanOrEqual(5);
+    expect(others.length).toBe(0);
+    expect(successes.length).toBe(3);
+    expect(ratelimited.length).toBe(7);
   });
 });

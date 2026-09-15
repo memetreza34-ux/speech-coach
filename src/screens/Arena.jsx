@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import * as Icons from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const ArenaScreen = () => {
   const { profile, setLocalProfile, user } = useAuth();
@@ -189,16 +190,14 @@ export const ArenaScreen = () => {
 
       <AnimatePresence>
         {confirmDeleteId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{opacity: 0, scale: 0.95}} animate={{opacity: 1, scale: 1}} className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6">
-            <h3 className="text-xl font-serif text-slate-900 mb-2">Szenario löschen?</h3>
-            <p className="text-slate-600 text-sm mb-6">Möchtest du dieses eigene Szenario wirklich endgültig löschen? Dieser Schritt kann nicht rückgängig gemacht werden.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Abbrechen</button>
-              <button onClick={executeDeleteCustom} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-colors">Endgültig löschen</button>
-            </div>
-          </motion.div>
-        </div>
+          <ConfirmModal 
+            title="Szenario löschen?"
+            description="Möchtest du dieses eigene Szenario wirklich endgültig löschen? Dieser Schritt kann nicht rückgängig gemacht werden."
+            confirmLabel="Endgültig löschen"
+            danger={true}
+            onCancel={() => setConfirmDeleteId(null)}
+            onConfirm={executeDeleteCustom}
+          />
       )}
       
       {showCustomModal && (

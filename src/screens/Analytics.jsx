@@ -7,7 +7,7 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { modeTitle, getSessionDate } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
-import { Brain, Activity, Clock, Hash, ChevronDown, ChevronUp, FileText, Loader2, Sparkles, TrendingUp, AlertTriangle, Target } from 'lucide-react';
+import { Brain, Activity, Hash, ChevronDown, ChevronUp, FileText, Loader2, Sparkles, TrendingUp, AlertTriangle, Target } from 'lucide-react';
 
 const renderAiTip = (aiTip) => {
   if (!aiTip) return null;

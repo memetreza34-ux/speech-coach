@@ -6,22 +6,8 @@ import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2, Trash
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { computeLevel, computeStreak } from '../utils/speech';
+import ConfirmModal from '../components/ConfirmModal';
 
-const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Löschen" }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-        <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-        <p className="text-sm text-slate-600 mb-6">{message}</p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-medium hover:bg-slate-200">Abbrechen</button>
-          <button onClick={onConfirm} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700">{confirmText}</button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const ProfileScreen = () => {
   const { profile, updateProfile, logout, deleteAccount, deleteTrainingData, user } = useAuth();
@@ -117,14 +103,16 @@ export const ProfileScreen = () => {
 
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10 pb-28 overflow-y-auto" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
-      <ConfirmModal 
-        isOpen={confirmModal.isOpen} 
-        title={confirmModal.type === 'account' ? 'Account endgültig löschen?' : 'Trainingsdaten löschen?'}
-        message={confirmModal.type === 'account' ? 'Dein Account und alle damit verbundenen Daten werden unwiderruflich gelöscht.' : 'Alle deine Trainingssessions und Analysen werden gelöscht. Dein Profil bleibt erhalten.'}
-        onConfirm={executeDelete}
-        onCancel={() => setConfirmModal({ isOpen: false, type: null })}
-        confirmText={isDeleting ? "Löscht..." : "Endgültig löschen"}
-      />
+      {confirmModal.isOpen && (
+        <ConfirmModal 
+          title={confirmModal.type === 'account' ? 'Account endgültig löschen?' : 'Trainingsdaten löschen?'}
+          description={confirmModal.type === 'account' ? 'Dein Account und alle damit verbundenen Daten werden unwiderruflich gelöscht.' : 'Alle deine Trainingssessions und Analysen werden gelöscht. Dein Profil bleibt erhalten.'}
+          confirmLabel={isDeleting ? "Löscht..." : "Endgültig löschen"}
+          danger={true}
+          onConfirm={executeDelete}
+          onCancel={() => setConfirmModal({ isOpen: false, type: null })}
+        />
+      )}
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-3xl font-serif text-slate-900 mb-8">Profil</h1>
         

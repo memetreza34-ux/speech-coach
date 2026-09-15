@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
+import { Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRecorder, getDynamicsLabel } from '../useRecorder';
+import { useRecorder } from '../useRecorder';
 import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle, MODES } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { useAuth } from '../context/AuthContext';

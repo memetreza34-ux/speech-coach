@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, LogIn } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
