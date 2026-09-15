@@ -30,8 +30,8 @@ export const PrivacyScreen = () => (
 
 export const ImprintScreen = () => (
   <Page title="Impressum" content={<>
-    <p>Angaben gemäß § 5 TMG</p>
-    <p>Speech Coach GmbH<br />Musterstraße 123<br />12345 Musterstadt</p>
+    <p>Angaben gemäß § 5 DDG</p>
+    <p>Speech Coach Demo<br />Musterstraße 123 (Demo)<br />12345 Musterstadt (Demo)</p>
     <p>Vertreten durch: Max Mustermann</p>
     <p>Kontakt:<br />E-Mail: kontakt@speechcoach-demo.com</p>
   </>} />

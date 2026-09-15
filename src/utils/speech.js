@@ -1,3 +1,12 @@
+export const mapApiErrorToAiStatus = (status, code) => {
+  if (status === 429 || code === 'QUOTA_EXCEEDED') return 'quota_exceeded';
+  if (status === 504 || code === 'AI_TIMEOUT') return 'timeout';
+  if (code === 'INVALID_AI_RESPONSE') return 'invalid_response';
+  if (code === 'UPSTREAM_ERROR') return 'upstream_error';
+  if (status === 403 || code === 'PREMIUM_REQUIRED') return 'premium_required';
+  return 'server_error';
+};
+
 import { auth } from '../lib/firebase';
 
 export const getPacingStatus = (wpm) => {
@@ -69,7 +78,7 @@ export const PROMPTS = {
   lang_en: "Client: „We love the proposal, but the timeline seems very aggressive. Can we discuss this?“",
   lang_fr: "Serveur: „Bonjour! Que désirez-vous manger aujourd'hui?“",
   lang_es: "Camarero: „¡Hola! ¿Qué van a tomar para cenar?“",
-  conflict_resolution_interactive: "Du führst ein schwieriges Gespräch. Die KI ist ein Kollege, der extrem wütend ist, weil du angeblich seine Idee geklaut hast. Beruhige ihn und löse den Konflikt.",
+  
   conflict_resolution: "Du führst ein schwieriges Gespräch. Die KI ist ein Kollege, der extrem wütend ist, weil du angeblich seine Idee geklaut hast. Beruhige ihn und löse den Konflikt.",
   storytelling: "Erzähle in 60 Sekunden eine fesselnde Geschichte aus deiner Jugend, die dein Leben geprägt hat. Nutze die Struktur der Heldenreise.",
   feedback_review: "Dein Chef fragt: 'Wie schätzen Sie Ihre eigene Leistung im letzten Jahr ein?'",
@@ -176,12 +185,9 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     if (!response.ok) {
       const errBody = await response.json().catch(() => null);
       console.error("Analyse-Server Fehler:", response.status, errBody);
-      if (response.status === 429) return fallback("Dein tägliches KI-Limit ist erreicht.", "quota_exceeded");
-      if (response.status === 504) return fallback("Zeitüberschreitung bei der KI-Analyse.", "timeout");
-      if (response.status === 502) return fallback("Ungültige Antwort von der KI erhalten.", "invalid_response");
-      
+      const aiStatus = mapApiErrorToAiStatus(response.status, errBody?.code);
       const tip = errBody?.error || "Die KI-Analyse ist fehlgeschlagen. Die Messwerte oben sind echt, nur der KI-Tipp fehlt.";
-      return fallback(tip, "server_error");
+      return fallback(tip, aiStatus);
     }
 
     const { fillers, confidenceScore, aiTip } = await response.json();

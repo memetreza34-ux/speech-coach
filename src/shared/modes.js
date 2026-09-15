@@ -36,7 +36,7 @@ export const MODES = [
   { id: 'politics_debate', category: 'politics', title: 'Die TV-Debatte', desc: 'Verteidige deine Position sachlich.', isPremium: false, color: 'from-slate-700 to-slate-900', icon: 'Mic2' },
   { id: 'crisis', category: 'politics', title: 'Krisen-PR', desc: 'Ein Shitstorm zieht auf. Reagiere souverän.', isPremium: true, color: 'from-red-500 to-rose-700', icon: 'AlertTriangle' },
   { id: 'panel', category: 'politics', title: 'Podiumsdiskussion', desc: 'Setze dich gegen Unterbrecher durch.', isPremium: true, color: 'from-violet-600 to-indigo-800', icon: 'Users' },
-  { id: 'townhall', category: 'politics', title: 'Bürgerdialog', desc: 'Kritische Fragen der Belegschaft.', isPremium: true, color: 'from-indigo-800 to-slate-900', icon: 'MessageSquare' },
+  { id: 'townhall', category: 'politics', title: 'Mitarbeiter-Townhall', desc: 'Stelle dich kritischen Fragen der Belegschaft.', isPremium: true, color: 'from-indigo-800 to-slate-900', icon: 'MessageSquare' },
 
   // Sprachen
   { id: 'lang_en', category: 'languages', title: 'English Business', desc: 'Smalltalk with US clients.', isPremium: false, color: 'from-emerald-500 to-teal-600', icon: 'Globe' },

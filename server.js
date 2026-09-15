@@ -334,9 +334,15 @@ export function createApp() {
 
   app.post('/api/analyze', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert (GEMINI_API_KEY fehlt).' });
+    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert (GEMINI_API_KEY fehlt).', code: 'SERVER_ERROR' });
 
     const { transcript, mode, profile, metrics, customPrompt, frames } = req.body || {};
+    if (frames !== undefined && !Array.isArray(frames)) {
+      return res.status(400).json({ error: 'frames muss ein Array sein.', code: 'INVALID_REQUEST' });
+    }
+    if (Array.isArray(frames) && frames.length > 5) {
+      return res.status(400).json({ error: 'Zu viele Frames (max 5).', code: 'INVALID_REQUEST' });
+    }
     const hasFrames = Array.isArray(frames) && frames.length > 0;
     let safeCustomPrompt = undefined;
     if (customPrompt !== undefined) {
@@ -356,9 +362,7 @@ export function createApp() {
     if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
-    if (hasFrames && frames.length > 5) {
-      return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
-    }
+    
     if (hasFrames) {
       if (!isPremium) return res.status(403).json({ error: 'Kamera-Feedback erfordert ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
       let totalSize = 0;
@@ -542,9 +546,15 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
   // API Route for Interactive Interview Mode
   app.post('/api/interview', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
+    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.', code: 'SERVER_ERROR' });
 
     const { messages, profile, customPrompt, frames } = req.body || {};
+    if (frames !== undefined && !Array.isArray(frames)) {
+      return res.status(400).json({ error: 'frames muss ein Array sein.', code: 'INVALID_REQUEST' });
+    }
+    if (Array.isArray(frames) && frames.length > 5) {
+      return res.status(400).json({ error: 'Zu viele Frames (max 5).', code: 'INVALID_REQUEST' });
+    }
     const hasFrames = Array.isArray(frames) && frames.length > 0;
     let safeCustomPrompt = undefined;
     if (customPrompt !== undefined) {
@@ -566,9 +576,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       if (typeof msg.text !== 'string' || msg.text.length > 2000) return res.status(400).json({ error: 'Ungültiger text.' });
     }
 
-    if (hasFrames && frames.length > 5) {
-      return res.status(400).json({ error: 'Zu viele Frames (max 5).' });
-    }
+    
     if (hasFrames) {
       let totalSize = 0;
       for (const frame of frames) {
@@ -707,7 +715,7 @@ Gib immer strikt dieses JSON Format zurück:
   // API Route for Long-Term Progress Analysis
   app.post('/api/analyze-progress', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
+    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.', code: 'SERVER_ERROR' });
 
     const { history, profile } = req.body || {};
     if (!Array.isArray(history) || history.length === 0 || history.length > 200) {
@@ -832,7 +840,7 @@ Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter ha
   // API Route for Persona Analysis
   app.post('/api/analyze-persona', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.' });
+    if (!apiKey) return res.status(500).json({ error: 'Server ist nicht konfiguriert.', code: 'SERVER_ERROR' });
 
     const { profile } = req.body || {};
     const safeProfile = profile && typeof profile === 'object' ? profile : {};

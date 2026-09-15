@@ -5,7 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRecorder } from '../useRecorder';
-import { getPromptForMode, modeTitle, MODES } from '../utils/speech';
+import { getPromptForMode, mapApiErrorToAiStatus, modeTitle, MODES } from '../utils/speech';
 import { auth, db } from '../lib/firebase';
 import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 

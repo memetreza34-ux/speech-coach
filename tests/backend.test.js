@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import supertest from 'supertest';
 import { createApp } from '../server.js';
 
@@ -360,4 +360,36 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(0);
     });
   });
+  describe('Usage Endpoint with Env Overrides', () => {
+    let originalEnv;
+    beforeAll(() => {
+      originalEnv = process.env;
+    });
+    
+    afterAll(() => {
+      process.env = originalEnv;
+    });
+
+    it('returns default values if no env set', async () => {
+      process.env = { ...originalEnv, FREE_DAILY_ANALYSES: '', PRO_DAILY_ANALYSES: '' };
+      getMock.mockResolvedValueOnce({ exists: true, data: () => ({ isPremium: false }) });
+      const res = await supertest(app).get('/api/usage').set('Authorization', 'Bearer valid-token');
+      expect(res.body.limits.analyze).toBe(5);
+    });
+
+    it('returns custom free values if env set', async () => {
+      process.env = { ...originalEnv, FREE_DAILY_ANALYSES: '3' };
+      getMock.mockResolvedValueOnce({ exists: true, data: () => ({ isPremium: false }) });
+      const res = await supertest(app).get('/api/usage').set('Authorization', 'Bearer valid-token');
+      expect(res.body.limits.analyze).toBe(3);
+    });
+
+    it('returns custom pro values if env set', async () => {
+      process.env = { ...originalEnv, PRO_DAILY_ANALYSES: '73' };
+      getMock.mockResolvedValueOnce({ exists: true, data: () => ({ isPremium: true }) });
+      const res = await supertest(app).get('/api/usage').set('Authorization', 'Bearer valid-token');
+      expect(res.body.limits.analyze).toBe(73);
+    });
+  });
+
 });
