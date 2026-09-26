@@ -6,7 +6,8 @@ export const HighlightedTranscript = ({ transcript }) => {
   const fillersPattern = "ähm|äh|also|sozusagen|quasi|halt|genau|irgendwie|eigentlich";
   const weakPattern = "vielleicht|eventuell|glaube|würde|könnte|man|irgendwas|irgendwer";
   
-  const regex = new RegExp(`\\b(${fillersPattern}|${weakPattern})\\b`, 'gi');
+  // \b kennt keine Umlaute ("ähm" würde nie markiert) — daher Unicode-Lookarounds.
+  const regex = new RegExp(`(?<!\\p{L})(${fillersPattern}|${weakPattern})(?!\\p{L})`, 'giu');
   const parts = transcript.split(regex);
   
   return (
