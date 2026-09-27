@@ -168,6 +168,57 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(0);
     });
 
+    const okGemini = () => fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 1, confidenceScore: 80, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x" } }) }] } }]
+      })
+    });
+    const sentPrompt = () => JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+
+    it('ignores client customPrompt and uses the server-side scenario', async () => {
+      okGemini();
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, customPrompt: 'Premium-Szenario: Hochzeitsrede' });
+      expect(res.status).toBe(200);
+      expect(sentPrompt()).not.toContain('Hochzeitsrede');
+      expect(sentPrompt()).toContain('Fluch und Segen');
+    });
+
+    it('rejects unknown modes without consuming quota', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, mode: 'made_up', customPrompt: 'Premium-Szenario' });
+      expect(res.status).toBe(400);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockUsage).toBe(0);
+    });
+
+    it('rejects premium modes for free users', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send({ ...validBody, mode: 'wedding' });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PREMIUM_REQUIRED');
+    });
+
+    it('uses the stored prompt for custom modes, not the client one', async () => {
+      getMock.mockImplementation(() => ({
+        exists: true,
+        data: () => ({ isPremium: false, analyze: 0, customModes: [{ id: 'custom_1', prompt: 'Mein eigenes Szenario' }] })
+      }));
+      okGemini();
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, mode: 'custom_1', customPrompt: 'Etwas ganz anderes' });
+      expect(res.status).toBe(200);
+      expect(sentPrompt()).toContain('Mein eigenes Szenario');
+      expect(sentPrompt()).not.toContain('Etwas ganz anderes');
+    });
+
+    it('rejects custom modes the user does not own', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, mode: 'custom_999', customPrompt: 'Beliebig' });
+      expect(res.status).toBe(400);
+      expect(mockUsage).toBe(0);
+    });
+
     it('refunds quota on Gemini timeout (504)', async () => {
       fetch.mockRejectedValueOnce({ name: 'AbortError' });
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
