@@ -7,6 +7,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MODES as PREMIUM_MODES_CONFIG } from './src/shared/modes.js';
+import { DAILY_CHALLENGES, getDailyChallenge, getPromptForMode } from './src/shared/prompts.js';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -40,6 +41,10 @@ const requireAuth = async (req, res, next) => {
 export function createApp() {
   const app = express();
 
+  // Cloud Run steht hinter einem Google-Proxy. Ohne diese Zeile sieht der Rate-Limiter
+  // nur die Proxy-IP — alle Nutzer teilen sich dann ein gemeinsames Limit.
+  app.set('trust proxy', 1);
+
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests
@@ -50,14 +55,25 @@ export function createApp() {
 
   const PREMIUM_MODES = PREMIUM_MODES_CONFIG.filter(m => m.isPremium).map(m => m.id);
 
-  const verifyPremiumMode = async (req, res, mode) => {
-    if (mode && PREMIUM_MODES.includes(mode)) {
-      const userDoc = await db.collection('users').doc(req.user.uid).get();
-      if (!userDoc.exists || userDoc.data().isPremium !== true) {
-        return false;
-      }
+  const INTERACTIVE_MODES = PREMIUM_MODES_CONFIG.filter(m => m.category === 'interactive').map(m => m.id);
+  const KNOWN_MODES = new Set(PREMIUM_MODES_CONFIG.map(m => m.id));
+  const INTERVIEW_EVAL_PROMPT = 'Bewerte das Live-Interview abschließend und gib einen Gesamt-Score.';
+
+  // Das Szenario kommt aus der Modus-Liste bzw. dem Nutzer-Dokument, nie als freier Text vom Client.
+  // Sonst könnte ein Gratis-Nutzer einen Premium-Text unter einer Gratis-ID schicken.
+  // Gibt null zurück, wenn der Modus unbekannt ist.
+  const resolveScenario = (mode, userData, clientPrompt) => {
+    if (typeof mode !== 'string') return null;
+    if (mode.startsWith('custom_')) {
+      return (userData.customModes || []).find(m => m.id === mode)?.prompt ?? null;
     }
-    return true;
+    if (mode === 'daily') {
+      // Client und Server können um Mitternacht verschiedene Tage haben — jede echte Challenge ist ok.
+      return DAILY_CHALLENGES.some(c => c.prompt === clientPrompt) ? clientPrompt : getDailyChallenge().prompt;
+    }
+    if (INTERACTIVE_MODES.includes(mode)) return INTERVIEW_EVAL_PROMPT;
+    if (KNOWN_MODES.has(mode)) return getPromptForMode(mode);
+    return null;
   };
 
   const getPositiveIntEnv = (name, fallback, options = { allowZero: false }) => {
@@ -344,19 +360,23 @@ export function createApp() {
       return res.status(400).json({ error: 'Zu viele Frames (max 5).', code: 'INVALID_REQUEST' });
     }
     const hasFrames = Array.isArray(frames) && frames.length > 0;
-    let safeCustomPrompt = undefined;
-    if (customPrompt !== undefined) {
-      if (typeof customPrompt === 'string') safeCustomPrompt = customPrompt.trim().slice(0, 1500);
-      else return res.status(400).json({ error: 'customPrompt muss ein String sein.', code: 'INVALID_REQUEST' });
-    }
-    
-    // Server-side Premium Check
-    if (!(await verifyPremiumMode(req, res, mode))) {
-      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
+    if (customPrompt !== undefined && typeof customPrompt !== 'string') {
+      return res.status(400).json({ error: 'customPrompt muss ein String sein.', code: 'INVALID_REQUEST' });
     }
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
-    const isPremium = userDoc.exists && userDoc.data().isPremium === true;
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const isPremium = userData.isPremium === true;
+
+    // Server-side Premium Check
+    if (PREMIUM_MODES.includes(mode) && !isPremium) {
+      return res.status(403).json({ error: 'Dieser Modus erfordert ein Premium-Abonnement.', code: 'PREMIUM_REQUIRED' });
+    }
+
+    const scenario = resolveScenario(mode, userData, customPrompt);
+    if (scenario === null) {
+      return res.status(400).json({ error: 'Unbekannter Modus.', code: 'INVALID_REQUEST' });
+    }
 
     // VALIDATION BEFORE QUOTA
     if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
@@ -402,7 +422,7 @@ export function createApp() {
     const dynamics = m.dynamics ?? '?';
     const pacingStatus = typeof m.pacingStatus === 'string' ? m.pacingStatus.slice(0, 20) : '?';
     
-    const contextPrompt = safeCustomPrompt ? `Das Szenario ist: "${safeCustomPrompt}"` : `Szenario-Modus: ${mode || 'impromptu'}.`;
+    const contextPrompt = `Das Szenario ist: "${scenario}"`;
 
     const promptText = `Du bist ein professioneller Kommunikationstrainer. Analysiere den folgenden Sprech-Versuch eines Nutzers.
 Nutzer-Profil: Name: ${profileName}, Rolle: ${profileRole}, Alter: ${profileAge}, Hobbys: ${profileHobbies}.

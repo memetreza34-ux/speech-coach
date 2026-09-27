@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -137,8 +137,12 @@ export const RecorderFlow = () => {
     return () => clearInterval(frameIntervalRef.current);
   }, [isRecording, useVideo, stream, frames.length]);
 
+  const stoppingRef = useRef(false);
   const toggleRecording = async () => {
     if (isRecording) {
+      // Sperre gegen Doppelklick: sonst würde die Session doppelt gespeichert.
+      if (stoppingRef.current) return;
+      stoppingRef.current = true;
       const recording = await stop();
       setSubScreen('loading');
       
@@ -173,6 +177,7 @@ export const RecorderFlow = () => {
       
       setSubScreen('feedback');
     } else {
+      stoppingRef.current = false;
       setElapsedMs(0);
       await start();
     }
