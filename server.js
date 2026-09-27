@@ -40,6 +40,10 @@ const requireAuth = async (req, res, next) => {
 export function createApp() {
   const app = express();
 
+  // Cloud Run steht hinter einem Google-Proxy. Ohne diese Zeile sieht der Rate-Limiter
+  // nur die Proxy-IP — alle Nutzer teilen sich dann ein gemeinsames Limit.
+  app.set('trust proxy', 1);
+
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests
