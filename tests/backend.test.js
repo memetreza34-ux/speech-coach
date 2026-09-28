@@ -323,6 +323,37 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(1);
     });
     
+    it('sends sessions oldest first, regardless of client order', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A"], improvements: ["A"] }) }] } }] })
+      });
+      const history = [
+        { date: '2026-09-03T10:00:00.000Z', wpm: 150 },
+        { date: '2026-09-01T10:00:00.000Z', wpm: 100 },
+        { date: '2026-09-02T10:00:00.000Z', wpm: 125 }
+      ];
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send({ history });
+      expect(res.status).toBe(200);
+      const prompt = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(prompt.indexOf('WPM: 100')).toBeLessThan(prompt.indexOf('WPM: 125'));
+      expect(prompt.indexOf('WPM: 125')).toBeLessThan(prompt.indexOf('WPM: 150'));
+    });
+
+    it('keeps only the newest 50 sessions', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A"], improvements: ["A"] }) }] } }] })
+      });
+      const history = Array.from({ length: 60 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), wpm: 100 + i }));
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send({ history });
+      expect(res.status).toBe(200);
+      const prompt = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(prompt).not.toContain('WPM: 109,');
+      expect(prompt).toContain('WPM: 110,');
+      expect(prompt).toContain('WPM: 159,');
+    });
+
     it('refunds on invalid output (insight empty)', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,

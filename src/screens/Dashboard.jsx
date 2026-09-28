@@ -1,27 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { useSessionHistory } from '../useSessionHistory';
 import { computeLevel, computeStreak, modeTitle, getDailyChallenge, getSessionDate } from '../utils/speech';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain, Flame } from 'lucide-react';
 
 export const DashboardScreen = () => {
   const { profile, user } = useAuth();
-  const [history, setHistory] = useState([]);
+  const { history } = useSessionHistory(user);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchHistory = async () => {
-      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'), limit(100));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => d.data());
-      setHistory(data);
-    };
-    fetchHistory();
-  }, [user]);
 
   const level = computeLevel(history);
   const streak = computeStreak(history);

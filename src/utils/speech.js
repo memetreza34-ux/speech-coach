@@ -49,6 +49,9 @@ export const getLocaleForMode = (id) => {
   return 'de-DE';
 };
 
+// Die Füllwort-Listen sind deutsch — in Fremdsprachen würde z.B. englisches "also" als Füllwort zählen.
+export const usesGermanFillers = (id) => getLocaleForMode(id) === 'de-DE';
+
 export const getSessionDate = (session) => {
   if (session.createdAt) {
     return session.createdAt.toDate ? session.createdAt.toDate() : new Date(session.createdAt);
@@ -105,10 +108,11 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     dynamics
   };
   measured.pacingStatus = getPacingStatus(measured.wpm);
+  const localFillers = usesGermanFillers(mode) ? countFillers(transcript) : null;
 
   const fallback = (errorMessage, status = 'server_error') => ({ 
     ...measured, 
-    fillers: countFillers(transcript), 
+    fillers: localFillers, 
     confidenceScore: null, 
     aiTip: null, 
     systemMessage: errorMessage,
@@ -140,7 +144,7 @@ export const analyzeTranscript = async (recording, mode, profile) => {
     const { fillers, confidenceScore, aiTip } = await response.json();
     return { 
       ...measured, 
-      fillers: typeof fillers === 'number' ? fillers : countFillers(transcript), 
+      fillers: typeof fillers === 'number' ? fillers : localFillers, 
       confidenceScore: typeof confidenceScore === 'number' ? confidenceScore : null, 
       aiTip,
       aiStatus: 'success'

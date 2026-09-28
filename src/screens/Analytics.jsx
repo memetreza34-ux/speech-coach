@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { useSessionHistory } from '../useSessionHistory';
 import { modeTitle, getSessionDate } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
@@ -125,7 +124,7 @@ const SessionCard = ({ session, profile }) => {
                   <FileText size={16} className="text-slate-400" />
                   <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Gesprochener Text</div>
                 </div>
-                <HighlightedTranscript transcript={session.transcript} />
+                <HighlightedTranscript transcript={session.transcript} mode={session.mode} />
               </div>
             )}
           </motion.div>
@@ -138,33 +137,29 @@ const SessionCard = ({ session, profile }) => {
 export const AnalyticsScreen = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { history, loading, error: historyError } = useSessionHistory(user);
   const [aiInsight, setAiInsight] = useState(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [insightError, setInsightError] = useState('');
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchHistory = async () => {
-      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => d.data());
-      setHistory(data);
-      setLoading(false);
-    };
-    fetchHistory();
-  }, [user]);
 
   const generateProgressInsight = async () => {
     setLoadingInsight(true);
     setInsightError('');
     try {
       const token = await user?.getIdToken();
+      // Nur die neuesten 50 und nur die Messwerte — Transkripte würden das Request-Limit sprengen.
+      const recent = history.slice(0, 50).map(s => ({
+        mode: s.modeLabel || s.mode,
+        durationMs: s.durationMs,
+        wpm: s.wpm,
+        fillers: s.fillers,
+        confidenceScore: s.confidenceScore,
+        date: s.date
+      }));
       const res = await fetch('/api/analyze-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ history, profile })
+        body: JSON.stringify({ history: recent, profile })
       });
       if (!res.ok) throw new Error('Fehler beim Abrufen der Analyse.');
       const data = await res.json();
@@ -211,6 +206,8 @@ export const AnalyticsScreen = () => {
 
         {loading ? (
           <div className="text-center py-10 text-slate-500">Daten werden geladen...</div>
+        ) : historyError ? (
+          <div className="text-center py-10 text-rose-500 text-sm">Deine Trainingsdaten konnten nicht geladen werden. Prüfe deine Verbindung und lade die Seite neu.</div>
         ) : history.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm relative overflow-hidden text-center mt-4">
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none flex items-center justify-center">

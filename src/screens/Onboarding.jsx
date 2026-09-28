@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Target, TrendingUp, Users, Loader2 } from 'lucide-react';
 
 export const OnboardingScreen = () => {
   const { updateProfile, profile } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [goal, setGoal] = useState('');
@@ -14,12 +16,18 @@ export const OnboardingScreen = () => {
 
   const handleFinish = async () => {
     setIsFinishing(true);
-    await updateProfile({
-      onboardingGoal: goal,
-      onboardingFrequency: frequency,
-      isOnboarded: true
-    });
-    
+    try {
+      await updateProfile({
+        onboardingGoal: goal,
+        onboardingFrequency: frequency,
+        isOnboarded: true
+      });
+    } catch {
+      setIsFinishing(false);
+      addToast('Profil konnte nicht gespeichert werden. Bitte versuche es erneut.', 'error');
+      return;
+    }
+
     // Simulate a brief "AI analyzing" state to add premium feel
     setTimeout(() => {
       navigate('/dashboard');

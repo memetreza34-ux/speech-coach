@@ -742,7 +742,7 @@ Gib immer strikt dieses JSON Format zurück:
       return res.status(400).json({ error: 'Keine Historie vorhanden oder zu lang.' });
     }
 
-    const sanitizedHistory = history.slice(0, 50).map(s => ({
+    const sanitizedHistory = history.map(s => ({
       mode: typeof s.mode === 'string' ? s.mode.slice(0, 50) : 'unbekannt',
       durationMs: typeof s.durationMs === 'number' ? Math.min(Math.max(s.durationMs, 0), 3600000) : 0,
       wpm: typeof s.wpm === 'number' ? Math.min(Math.max(s.wpm, 0), 500) : 0,
@@ -750,6 +750,11 @@ Gib immer strikt dieses JSON Format zurück:
       confidenceScore: typeof s.confidenceScore === 'number' ? Math.min(Math.max(s.confidenceScore, 0), 100) : null,
       date: typeof s.date === 'string' ? s.date.slice(0, 30) : (typeof s.timestamp === 'number' ? new Date(s.timestamp).toISOString() : new Date().toISOString())
     }));
+    // Die KI liest "Session 1" als die erste — daher die neuesten 50 nehmen und chronologisch sortieren,
+    // egal in welcher Reihenfolge der Client sie schickt.
+    const sessionTime = (s) => Date.parse(s.date) || 0;
+    sanitizedHistory.sort((a, b) => sessionTime(b) - sessionTime(a));
+    const recentHistory = sanitizedHistory.slice(0, 50).reverse();
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
@@ -761,7 +766,7 @@ Gib immer strikt dieses JSON Format zurück:
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
     
     // Prepare history summary
-    const historySummary = sanitizedHistory.map((session, i) => {
+    const historySummary = recentHistory.map((session, i) => {
       const date = new Date(session.date).toLocaleDateString('de-DE');
       return `Session ${i + 1} (${date}): Modus: ${session.mode}, Dauer: ${session.durationMs}ms, WPM: ${session.wpm}, Füllwörter: ${session.fillers}, Confidence Score: ${session.confidenceScore ?? '?'}`;
     }).join('\n');
@@ -769,7 +774,7 @@ Gib immer strikt dieses JSON Format zurück:
     const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Der Nutzer hat mich gebeten, seinen Langzeit-Fortschritt zu analysieren.
 Nutzer-Profil: Name: ${String(safeProfile.name || 'Nutzer').slice(0, 50)}, Rolle: ${String(safeProfile.role || '').slice(0, 50)}.
 
-Hier sind die letzten Trainings-Aufzeichnungen des Nutzers:
+Hier sind die letzten Trainings-Aufzeichnungen des Nutzers, chronologisch sortiert (Session 1 ist die älteste, die letzte Session die neueste):
 ${historySummary}
 
 Bitte schreibe eine detaillierte, motivierende, aber sehr konkrete KI-Langzeitanalyse.
@@ -961,7 +966,8 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
 export async function startServer() {
   const app = createApp();
-  const PORT = 3000;
+  // Cloud Run gibt den Port über PORT vor (Standard 8080).
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

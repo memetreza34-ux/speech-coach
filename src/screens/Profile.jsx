@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2, Trash2 } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { useSessionHistory } from '../useSessionHistory';
 import { computeLevel, computeStreak } from '../utils/speech';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -19,7 +18,7 @@ export const ProfileScreen = () => {
     hobbies: profile?.hobbies || ''
   });
   const [saving, setSaving] = useState(false);
-  const [history, setHistory] = useState([]);
+  const { history, setHistory } = useSessionHistory(user);
   
   const [aiPersona, setAiPersona] = useState(null);
   const [loadingPersona, setLoadingPersona] = useState(false);
@@ -27,17 +26,6 @@ export const ProfileScreen = () => {
 
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null });
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchHistory = async () => {
-      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => d.data());
-      setHistory(data);
-    };
-    fetchHistory();
-  }, [user]);
 
   const level = computeLevel(history);
   const streak = computeStreak(history);

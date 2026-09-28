@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Square, Loader2, ChevronLeft, Volume2, User, RefreshCcw } from 'lucide-react';
+import { Mic, Square, Loader2, ChevronLeft, Volume2, User, RefreshCcw, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRecorder } from '../useRecorder';
+import { useFrameCapture } from '../useFrameCapture';
 import { getPromptForMode, mapApiErrorToAiStatus, modeTitle, MODES } from '../utils/speech';
 import { auth, db } from '../lib/firebase';
 import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -27,6 +28,8 @@ export default function InterviewFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [failedTurnContext, setFailedTurnContext] = useState(null);
   const [feedback, setFeedback] = useState('');
+  const [isFinished, setIsFinished] = useState(false);
+  const [finalResult, setFinalResult] = useState(null);
   const [sessionMetrics, setSessionMetrics] = useState({
     totalDurationMs: 0,
     totalPauseCount: 0,
@@ -39,10 +42,9 @@ export default function InterviewFlow() {
   
   const [useVideo, setUseVideo] = useState(false);
   const videoRef = useRef(null);
-  const [frames, setFrames] = useState([]);
-  const frameIntervalRef = useRef(null);
 
   const { isRecording, transcript, start, stop, stream } = useRecorder('de-DE', useVideo);
+  const { capture, takeFrames } = useFrameCapture(videoRef, isRecording && useVideo && !!stream);
 
   const hasStartedRef = useRef(false);
 
@@ -52,26 +54,10 @@ export default function InterviewFlow() {
     }
   }, [stream]);
 
-  useEffect(() => {
-    if (isRecording && useVideo && stream) {
-      frameIntervalRef.current = setInterval(() => {
-        if (videoRef.current && frames.length < 5) {
-          const canvas = document.createElement('canvas');
-          canvas.width = 320;
-          canvas.height = 240;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const base64 = canvas.toDataURL('image/jpeg', 0.6);
-          setFrames(prev => prev.length < 5 ? [...prev, base64] : prev);
-        }
-      }, 8000);
-    } else {
-      clearInterval(frameIntervalRef.current);
-    }
-    return () => clearInterval(frameIntervalRef.current);
-  }, [isRecording, useVideo, stream, frames.length]);
+  // Beim Verlassen der Seite soll der Interviewer nicht weiterreden.
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
-  const sendTurn = async (chatHistory, currentMetrics = sessionMetrics) => {
+  const sendTurn = async (chatHistory, currentMetrics = sessionMetrics, frames = []) => {
     setIsProcessing(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -83,7 +69,7 @@ export default function InterviewFlow() {
           messages: chatHistory,
           profile,
           customPrompt: `${modeTitle(modeId)} - ${getPromptForMode(modeId)}`,
-          frames: frames?.length ? frames : undefined
+          frames: frames.length ? frames : undefined
         })
       });
             if (response.ok) {
@@ -98,6 +84,7 @@ export default function InterviewFlow() {
         speakText(data.interviewerSpeech);
         
         if (data.isFinished) {
+          setIsFinished(true);
           // Final Evaluation via /api/analyze
           const completeHistory = [...chatHistory, { role: 'model', text: data.interviewerSpeech }];
           const finalTranscript = completeHistory.filter(m => m.text !== 'Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.').map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n');
@@ -123,6 +110,7 @@ export default function InterviewFlow() {
 
           let aiFeedback = null;
           let aiStatus = 'not_available';
+          let systemMessage = null;
           try {
              const analyzeRes = await fetch('/api/analyze', {
                 method: 'POST',
@@ -139,25 +127,19 @@ export default function InterviewFlow() {
                  aiFeedback = await analyzeRes.json();
                  aiStatus = 'success';
              } else {
-                 let errBody = null;
-                 try { errBody = await analyzeRes.json(); } catch(e) {}
-                 
-                 if (analyzeRes.status === 429) aiStatus = 'quota_exceeded';
-                 else if (analyzeRes.status === 504) aiStatus = 'timeout';
-                 else if (analyzeRes.status === 502) {
-                     aiStatus = errBody?.error?.includes('Upstream') ? 'upstream_error' : 'invalid_response';
-                 }
-                 else aiStatus = 'server_error';
+                 const errBody = await analyzeRes.json().catch(() => null);
+                 aiStatus = mapApiErrorToAiStatus(analyzeRes.status, errBody?.code);
+                 systemMessage = errBody?.error || null;
              }
           } catch(e) {
              console.error("Evaluation error", e);
              aiStatus = 'server_error';
           }
-          
-          // Save session
+
+          // Nicht auf den Server warten: offline würde das Promise sonst ewig hängen.
           if (auth.currentUser) {
             const sessionRef = doc(collection(db, 'users', auth.currentUser.uid, 'sessions'));
-            await setDoc(sessionRef, {
+            setDoc(sessionRef, {
               mode: modeId,
               modeLabel: modeTitle(modeId),
               date: new Date().toISOString(),
@@ -174,9 +156,18 @@ export default function InterviewFlow() {
               longestPauseMs: finalMetrics.longestPauseMs,
               durationMs: finalMetrics.durationMs,
               transcript: finalTranscript
-            }).catch(console.error);
+            }).catch(e => {
+              console.error('Session konnte nicht gespeichert werden:', e);
+              addToast('Die Session konnte nicht gespeichert werden.', 'error');
+            });
           }
-          setTimeout(() => navigate('/dashboard'), 5000);
+          setFinalResult({
+            wpm: finalMetrics.wpm,
+            fillers: aiFeedback?.fillers ?? null,
+            confidenceScore: aiFeedback?.confidenceScore ?? null,
+            aiTip: aiFeedback?.aiTip ?? null,
+            systemMessage: aiStatus === 'success' ? null : (systemMessage || 'Die Gesamtbewertung ist fehlgeschlagen. Deine Messwerte sind trotzdem gespeichert.')
+          });
         }
       } else {
         const errData = await response.json().catch(() => ({}));
@@ -195,7 +186,6 @@ export default function InterviewFlow() {
       setFailedTurnContext(chatHistory);
     } finally {
       setIsProcessing(false);
-      setFrames([]); // reset frames for next turn
     }
   };
 
@@ -226,6 +216,8 @@ export default function InterviewFlow() {
 
   const handleToggleRecording = async () => {
     if (isRecording) {
+      if (useVideo) capture(); // letztes Bild, bevor die Kamera stoppt
+      const frames = takeFrames();
       const recording = await stop();
       
       const userText = recording.transcript || "(Keine hörbare Antwort)";
@@ -244,9 +236,10 @@ export default function InterviewFlow() {
 
       const newHistory = [...messages, { role: 'user', text: userText }];
       setMessages(newHistory);
-      await sendTurn(newHistory, updatedMetrics);
+      await sendTurn(newHistory, updatedMetrics, frames);
     } else {
-      setFrames([]);
+      // Sonst nimmt das Mikrofon die Stimme des Interviewers mit auf.
+      window.speechSynthesis?.cancel();
       await start();
     }
   };
@@ -305,7 +298,7 @@ export default function InterviewFlow() {
             ))}
             {isProcessing && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="self-start flex items-center gap-2 text-slate-400 text-sm py-4">
-                <Loader2 className="animate-spin" size={16} /> Interviewer denkt nach...
+                <Loader2 className="animate-spin" size={16} /> {isFinished ? 'Gesamtauswertung läuft…' : 'Interviewer denkt nach...'}
               </motion.div>
             )}
           </AnimatePresence>
@@ -313,7 +306,7 @@ export default function InterviewFlow() {
 
         {/* Feedback Snippet */}
         <AnimatePresence>
-          {feedback && !isRecording && !isProcessing && !failedTurnContext && (
+          {feedback && !isRecording && !isProcessing && !failedTurnContext && !isFinished && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400"></div>
               <div className="text-[10px] font-bold text-amber-800 tracking-widest uppercase mb-1">Coach-Tipp zur letzten Antwort</div>
@@ -323,6 +316,41 @@ export default function InterviewFlow() {
         </AnimatePresence>
 
         {/* Recording Controls */}
+        {isFinished ? (
+          finalResult && (
+            <div className="shrink-0 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="text-[10px] font-bold text-indigo-600 tracking-widest uppercase mb-4">Interview beendet · Gesamtauswertung</div>
+              <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+                <div>
+                  <div className={`text-3xl font-serif ${finalResult.confidenceScore !== null && finalResult.confidenceScore < 50 ? 'text-red-500' : 'text-slate-900'}`}>{finalResult.confidenceScore ?? '–'}</div>
+                  <div className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Score</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-serif text-slate-900">{finalResult.wpm}</div>
+                  <div className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">WPM</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-serif text-slate-900">{finalResult.fillers ?? '–'}</div>
+                  <div className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Füllwörter</div>
+                </div>
+              </div>
+              {finalResult.aiTip ? (
+                <div className="space-y-3 mb-5">
+                  <p className="text-sm text-slate-700 leading-relaxed">{finalResult.aiTip.summary}</p>
+                  <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+                    <div className="text-[10px] font-bold text-indigo-800 tracking-widest uppercase mb-1">Tipp fürs nächste Mal</div>
+                    <p className="text-sm text-indigo-900 font-medium leading-relaxed">{finalResult.aiTip.actionTip}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600 leading-relaxed mb-5">{finalResult.systemMessage}</p>
+              )}
+              <button onClick={() => navigate('/dashboard')} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors">
+                <Check size={18} strokeWidth={2.5} /> Abschließen
+              </button>
+            </div>
+          )
+        ) : (
         <div className="shrink-0 flex flex-col items-center">
           {failedTurnContext ? (
             <button
@@ -351,6 +379,7 @@ export default function InterviewFlow() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
