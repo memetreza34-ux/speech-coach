@@ -10,6 +10,10 @@ import { getPromptForMode, mapApiErrorToAiStatus, modeTitle, MODES } from '../ut
 import { auth, db } from '../lib/firebase';
 import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 
+// Startanweisung an die KI — bleibt im Verlauf (die KI braucht ihn ab der ersten Nutzer-Nachricht),
+// wird aber im Chat und im Transkript ausgeblendet.
+const INTERVIEW_START = 'Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.';
+
 export default function InterviewFlow() {
   const { modeId } = useParams();
   const navigate = useNavigate();
@@ -17,12 +21,10 @@ export default function InterviewFlow() {
   const { addToast } = useToast();
   
   // Premium Guard
+  const isLocked = !!MODES.find(m => m.id === modeId)?.isPremium && !profile?.isPremium;
   useEffect(() => {
-    const modeConfig = MODES.find(m => m.id === modeId);
-    if (modeConfig?.isPremium && !profile?.isPremium) {
-      navigate('/paywall', { replace: true });
-    }
-  }, [modeId, profile, navigate]);
+    if (isLocked) navigate('/paywall', { replace: true });
+  }, [isLocked, navigate]);
 
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -47,6 +49,7 @@ export default function InterviewFlow() {
   const { capture, takeFrames } = useFrameCapture(videoRef, isRecording && useVideo && !!stream);
 
   const hasStartedRef = useRef(false);
+  const chatRef = useRef(null);
 
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -87,7 +90,7 @@ export default function InterviewFlow() {
           setIsFinished(true);
           // Final Evaluation via /api/analyze
           const completeHistory = [...chatHistory, { role: 'model', text: data.interviewerSpeech }];
-          const finalTranscript = completeHistory.filter(m => m.text !== 'Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.').map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n');
+          const finalTranscript = completeHistory.filter(m => m.text !== INTERVIEW_START).map(m => `${m.role === 'user' ? 'Du' : 'Interviewer'}: ${m.text}`).join('\n\n');
           
           const finalWpm = currentMetrics.totalDurationMs > 0 ? Math.round((currentMetrics.totalWords / (currentMetrics.totalDurationMs / 1000 / 60))) : 0;
           
@@ -191,18 +194,31 @@ export default function InterviewFlow() {
 
   const startInterview = async () => {
     setIsProcessing(true);
-    const initialContext = `Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.`;
-    await sendTurn([{ role: 'user', text: initialContext }]);
+    const initialHistory = [{ role: 'user', text: INTERVIEW_START }];
+    setMessages(initialHistory);
+    await sendTurn(initialHistory);
   };
 
-  // Initial greeting
+  // Initial greeting — nicht für gesperrte Modi, sonst geht vor der Paywall-Umleitung
+  // noch eine Anfrage raus und dort erscheint eine Fehlermeldung.
   useEffect(() => {
-    if (!hasStartedRef.current) {
+    if (!hasStartedRef.current && !isLocked) {
       hasStartedRef.current = true;
       startInterview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Neueste Frage sichtbar halten — auch wenn Tipp-Box oder Aufnahme-Zeile den Chat danach verkleinern.
+  useEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+    const toBottom = () => { el.scrollTop = el.scrollHeight; };
+    toBottom();
+    const observer = new ResizeObserver(toBottom);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [messages, isProcessing]);
 
   const speakText = (text) => {
     if ('speechSynthesis' in window) {
@@ -274,9 +290,9 @@ export default function InterviewFlow() {
         )}
 
         {/* Chat History */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-6 mb-6 px-2">
+        <div ref={chatRef} className="flex-1 overflow-y-auto flex flex-col gap-6 mb-6 px-2">
           <AnimatePresence>
-            {messages.filter(m => m.role === 'model' || m.text !== 'Wir starten jetzt. Stelle dich als Interviewer vor und stelle die allererste Frage.').map((msg, i) => (
+            {messages.filter(m => m.text !== INTERVIEW_START).map((msg, i) => (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}

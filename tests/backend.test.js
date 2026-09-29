@@ -185,6 +185,21 @@ describe('Backend API Tests', () => {
       expect(sentPrompt()).toContain('Fluch und Segen');
     });
 
+    it('accepts long transcripts such as a full live interview', async () => {
+      okGemini();
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, transcript: 'Wort '.repeat(3000) });
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects transcripts above the hard limit without consuming quota', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, transcript: 'x'.repeat(30001) });
+      expect(res.status).toBe(400);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockUsage).toBe(0);
+    });
+
     it('rejects unknown modes without consuming quota', async () => {
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
         .send({ ...validBody, mode: 'made_up', customPrompt: 'Premium-Szenario' });
@@ -266,6 +281,20 @@ describe('Backend API Tests', () => {
       const res = await request.post('/api/interview').set('Authorization', 'Bearer token').send(validBody);
       expect(res.status).toBe(200);
       expect(mockUsage).toBe(1);
+    });
+
+    it('shortens very long answers instead of rejecting them', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ feedback: "x", isFinished: false, interviewerSpeech: "x" }) }] } }]
+        })
+      });
+      const res = await request.post('/api/interview').set('Authorization', 'Bearer token')
+        .send({ messages: [{ role: 'user', text: 'a'.repeat(8000) }] });
+      expect(res.status).toBe(200);
+      const sent = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(sent.length).toBe(5000);
     });
 
     it('refunds on invalid AI response (missing interviewerSpeech)', async () => {

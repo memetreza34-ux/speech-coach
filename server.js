@@ -58,6 +58,10 @@ export function createApp() {
   const INTERACTIVE_MODES = PREMIUM_MODES_CONFIG.filter(m => m.category === 'interactive').map(m => m.id);
   const KNOWN_MODES = new Set(PREMIUM_MODES_CONFIG.map(m => m.id));
   const INTERVIEW_EVAL_PROMPT = 'Bewerte das Live-Interview abschließend und gib einen Gesamt-Score.';
+  // ~35 Min. Sprechen — ein komplettes Live-Interview muss hineinpassen.
+  const MAX_TRANSCRIPT_CHARS = 30000;
+  // Längere Antworten werden gekürzt statt abgelehnt: sonst scheitert auch "Erneut versuchen" immer wieder.
+  const MAX_MESSAGE_CHARS = 5000;
 
   // Das Szenario kommt aus der Modus-Liste bzw. dem Nutzer-Dokument, nie als freier Text vom Client.
   // Sonst könnte ein Gratis-Nutzer einen Premium-Text unter einer Gratis-ID schicken.
@@ -379,7 +383,7 @@ export function createApp() {
     }
 
     // VALIDATION BEFORE QUOTA
-    if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
+    if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > MAX_TRANSCRIPT_CHARS) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
     
@@ -400,7 +404,6 @@ export function createApp() {
     const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
     const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
 
-    const safeTranscript = transcript.slice(0, 10000);
     const m = typeof metrics === 'object' && metrics ? metrics : {};
     
     if (m.wpm !== undefined && (typeof m.wpm !== 'number' || m.wpm < 0 || m.wpm > 500)) return res.status(400).json({ error: 'Ungültiger wpm-Wert.' });
@@ -434,7 +437,7 @@ Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst si
 - Redeanteil: ${speakingRatio}% der Aufnahmezeit
 - Lautstärkedynamik: ${dynamics} (unter 35 = monoton, über 75 = sehr bewegt)
 
-Transkript: "${safeTranscript}"
+Transkript: "${transcript}"
 
 ${hasFrames ? "Du erhältst zusätzlich Einzelbilder aus der Webcam des Nutzers während des Sprechens. Beurteile anhand dieser Bilder Körpersprache, Gestik und Blickkontakt (Wirkt die Person offen? Schaut sie in die Kamera?)." : "Keine Videobilder verfügbar."}
 
@@ -593,7 +596,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     
     for (const msg of messages) {
       if (msg.role !== 'user' && msg.role !== 'model') return res.status(400).json({ error: 'Ungültige role.' });
-      if (typeof msg.text !== 'string' || msg.text.length > 2000) return res.status(400).json({ error: 'Ungültiger text.' });
+      if (typeof msg.text !== 'string') return res.status(400).json({ error: 'Ungültiger text.' });
     }
 
     
@@ -643,7 +646,7 @@ Gib immer strikt dieses JSON Format zurück:
 
     const formattedMessages = messages.map(m => ({
       role: m.role,
-      parts: [{ text: m.text }]
+      parts: [{ text: m.text.slice(0, MAX_MESSAGE_CHARS) }]
     }));
 
     if (hasFrames) {

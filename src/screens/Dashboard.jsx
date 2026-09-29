@@ -8,7 +8,7 @@ import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain, Flame } from '
 
 export const DashboardScreen = () => {
   const { profile, user } = useAuth();
-  const { history } = useSessionHistory(user);
+  const { history, loading, error } = useSessionHistory(user);
   const navigate = useNavigate();
 
   const level = computeLevel(history);
@@ -157,7 +157,7 @@ export const DashboardScreen = () => {
               <Crown size={16} className="text-amber-500" />
               <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Dein Level</div>
             </div>
-            <div className="text-2xl font-serif text-slate-900">{level}</div>
+            <div className="text-2xl font-serif text-slate-900">{error ? '–' : level}</div>
           </div>
           <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
             <motion.div 
@@ -167,7 +167,7 @@ export const DashboardScreen = () => {
               transition={{ duration: 1, ease: "easeOut" }}
             />
           </div>
-          <div className="text-xs text-slate-500 text-right">Noch {sessionsToNextLevel} {sessionsToNextLevel === 1 ? 'Session' : 'Sessions'} bis Level {level + 1}</div>
+          <div className="text-xs text-slate-500 text-right">{error ? 'Fortschritt nicht verfügbar' : `Noch ${sessionsToNextLevel} ${sessionsToNextLevel === 1 ? 'Session' : 'Sessions'} bis Level ${level + 1}`}</div>
         </div>
 
         {/* Stats Grid */}
@@ -177,7 +177,7 @@ export const DashboardScreen = () => {
               <Zap size={16} className="text-amber-500" />
               <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Streak</div>
             </div>
-            <div className="text-3xl font-serif text-slate-900 mb-1">{streak}</div>
+            <div className="text-3xl font-serif text-slate-900 mb-1">{error ? '–' : streak}</div>
             <div className="text-xs text-slate-500">{streak === 1 ? 'Tag' : 'Tage'} in Folge</div>
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -226,6 +226,10 @@ export const DashboardScreen = () => {
                 </div>
               ))}
             </div>
+          ) : error ? (
+            <p className="text-sm text-rose-500 text-center py-6">Deine Sessions konnten nicht geladen werden. Prüfe deine Verbindung und lade die Seite neu.</p>
+          ) : loading ? (
+            <p className="text-sm text-slate-400 text-center py-6">Lädt…</p>
           ) : (
             <div className="text-center py-6">
               <div className="bg-slate-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
