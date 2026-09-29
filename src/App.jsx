@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Home, Target, User, Brain, BookOpen } from 'lucide-react';
@@ -7,13 +7,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginScreen } from './screens/Login';
 import { DashboardScreen } from './screens/Dashboard';
 import { ArenaScreen } from './screens/Arena';
-import { AnalyticsScreen } from './screens/Analytics';
 import { AcademyScreen } from './screens/Academy';
 import { ProfileScreen } from './screens/Profile';
 import { PaywallScreen } from './screens/Paywall';
 import { OnboardingScreen } from './screens/Onboarding';
 import { RecorderFlow } from './screens/RecorderFlow';
 import InterviewFlow from './screens/InterviewFlow';
+
+// Die Analyse bringt recharts mit (~⅓ des Bundles) — erst laden, wenn sie geöffnet wird.
+const AnalyticsScreen = lazy(() => import('./screens/Analytics').then(m => ({ default: m.AnalyticsScreen })));
 
 import { PrivacyScreen, ImprintScreen, TermsScreen } from './screens/Legal';
 import { ToastProvider } from './context/ToastContext';
@@ -67,7 +69,7 @@ const AppRoutes = () => {
           <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingScreen /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
           <Route path="/arena" element={<ProtectedRoute><ArenaScreen /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><AnalyticsScreen /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><Suspense fallback={null}><AnalyticsScreen /></Suspense></ProtectedRoute>} />
           <Route path="/academy" element={<ProtectedRoute><AcademyScreen /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
           <Route path="/paywall" element={<ProtectedRoute><PaywallScreen /></ProtectedRoute>} />

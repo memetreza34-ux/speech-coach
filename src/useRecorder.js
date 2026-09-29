@@ -165,13 +165,29 @@ export function useRecorder(lang, withVideo = false) {
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = lang;
+      // Browser (v.a. Chrome auf Android) beenden die Erkennung nach Sprechpausen von selbst.
+      // Dann neu starten und den bisherigen Text behalten — sonst bricht das Transkript mittendrin ab.
+      let committed = '';
+      let giveUp = false;
+      let networkErrors = 0;
       recognition.onresult = (event) => {
+        networkErrors = 0;
         let text = '';
         for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript + ' ';
-        transcriptRef.current = text;
-        setTranscript(text);
+        transcriptRef.current = committed + text;
+        setTranscript(transcriptRef.current);
       };
-      recognition.onerror = () => { /* Aufnahme läuft auch ohne Transkript weiter */ };
+      recognition.onerror = (event) => {
+        // Aufnahme läuft auch ohne Transkript weiter. Ohne Berechtigung oder Netz würde
+        // der Neustart aber endlos scheitern.
+        if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) giveUp = true;
+        if (event.error === 'network' && ++networkErrors >= 3) giveUp = true;
+      };
+      recognition.onend = () => {
+        if (giveUp || recognitionRef.current !== recognition) return; // bewusst gestoppt
+        committed = transcriptRef.current;
+        try { recognition.start(); } catch { /* bereits gestartet */ }
+      };
       try { recognition.start(); } catch { /* bereits gestartet */ }
       recognitionRef.current = recognition;
     } else {

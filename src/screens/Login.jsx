@@ -55,6 +55,7 @@ export const LoginScreen = () => {
         <p className="mt-8 text-xs text-slate-400 text-center max-w-xs">
           Mit der Anmeldung akzeptierst du unsere <a href="/terms" className="underline hover:text-slate-600">Nutzungsbedingungen</a> und <a href="/privacy" className="underline hover:text-slate-600">Datenschutzerklärung</a>.
         </p>
+        <a href="/imprint" className="mt-3 text-xs text-slate-400 underline hover:text-slate-600">Impressum</a>
       </div>
     </div>
   );

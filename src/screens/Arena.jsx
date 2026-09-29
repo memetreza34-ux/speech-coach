@@ -4,7 +4,8 @@ import { CATEGORIES, MODES } from '../utils/speech';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
-import * as Icons from 'lucide-react';
+import { Plus, Lock, Loader2, Trash2, X } from 'lucide-react';
+import { MODE_ICONS } from '../components/modeIcons';
 import ConfirmModal from '../components/ConfirmModal';
 
 export const ArenaScreen = () => {
@@ -53,7 +54,7 @@ export const ArenaScreen = () => {
       addToast('Eigenes Szenario erfolgreich erstellt!', 'success');
       setShowCustomModal(false);
       setCustomForm({ title: '', prompt: '' });
-    } catch (e) {
+    } catch {
       addToast('Netzwerkfehler beim Erstellen.', 'error');
     }
   };
@@ -84,7 +85,7 @@ export const ArenaScreen = () => {
       }
       setLocalProfile({ customModes: customModes.filter(m => m.id !== id) });
       addToast('Szenario gelöscht.', 'success');
-    } catch (err) {
+    } catch {
       addToast('Netzwerkfehler beim Löschen.', 'error');
     } finally {
       setDeletingId(null);
@@ -109,7 +110,7 @@ export const ArenaScreen = () => {
             }}
             className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
           >
-            <Icons.Plus size={16} /> Eigener Modus
+            <Plus size={16} /> Eigener Modus
           </button>
         </div>
 
@@ -119,7 +120,7 @@ export const ArenaScreen = () => {
             <h2 className="text-lg font-serif text-slate-800 mb-4">Meine Szenarien</h2>
             <div className="grid grid-cols-2 gap-3">
               {customModes.map(mode => {
-                const IconComponent = Icons[mode.icon] || Icons.Zap;
+                const IconComponent = MODE_ICONS[mode.icon] || MODE_ICONS.Zap;
                 return (
                   <motion.div 
                     key={mode.id}
@@ -136,10 +137,10 @@ export const ArenaScreen = () => {
                           disabled={deletingId === mode.id}
                           className="p-1 rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white disabled:opacity-50"
                         >
-                          {deletingId === mode.id ? <Icons.Loader2 size={16} className="animate-spin" /> : <Icons.Trash2 size={16} />}
+                          {deletingId === mode.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         </button>
                       </div>
-                      <div className="font-semibold text-sm leading-tight text-white mt-4 pr-2">{mode.title}</div>
+                      <div className="font-semibold text-sm leading-tight text-white mt-4 pr-2 hyphens-auto break-words">{mode.title}</div>
                     </div>
                   </motion.div>
                 );
@@ -159,7 +160,7 @@ export const ArenaScreen = () => {
               <div className="grid grid-cols-2 gap-3">
                 {catModes.map(mode => {
                   const locked = mode.isPremium && !profile?.isPremium;
-                  const IconComponent = Icons[mode.icon] || Icons.MessageSquare;
+                  const IconComponent = MODE_ICONS[mode.icon] || MODE_ICONS.MessageSquare;
                   
                   return (
                     <motion.div 
@@ -173,11 +174,11 @@ export const ArenaScreen = () => {
                           <IconComponent className="text-white/80" size={24} />
                           {locked && (
                             <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full">
-                              <Icons.Lock size={14} className="text-white" />
+                              <Lock size={14} className="text-white" />
                             </div>
                           )}
                         </div>
-                        <div className="font-semibold text-sm leading-tight text-white mt-4 pr-2">{mode.title}</div>
+                        <div className="font-semibold text-sm leading-tight text-white mt-4 pr-2 hyphens-auto break-words">{mode.title}</div>
                       </div>
                     </motion.div>
                   );
@@ -212,18 +213,18 @@ export const ArenaScreen = () => {
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-serif text-slate-900">Eigenes Szenario erstellen</h3>
                 <button onClick={() => setShowCustomModal(false)} className="text-slate-400 hover:text-slate-600">
-                  <Icons.X size={24} />
+                  <X size={24} />
                 </button>
               </div>
 
               <div className="space-y-4 mb-8">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Titel (z.B. "Gehalt 2026")</label>
-                  <input type="text" maxLength={25} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500" value={customForm.title} onChange={e => setCustomForm({...customForm, title: e.target.value})} />
+                  <label htmlFor="custom-title" className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Titel (z.B. "Gehalt 2026")</label>
+                  <input id="custom-title" type="text" maxLength={25} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500" value={customForm.title} onChange={e => setCustomForm({...customForm, title: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Ausgangssituation (Was sagt der Partner?)</label>
-                  <textarea rows={3} placeholder="z.B. Dein Chef sagt: Wir haben dieses Jahr kein Budget für Sie." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 resize-none" value={customForm.prompt} onChange={e => setCustomForm({...customForm, prompt: e.target.value})} />
+                  <label htmlFor="custom-prompt" className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Ausgangssituation (Was sagt der Partner?)</label>
+                  <textarea id="custom-prompt" rows={3} placeholder="z.B. Dein Chef sagt: Wir haben dieses Jahr kein Budget für Sie." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 resize-none" value={customForm.prompt} onChange={e => setCustomForm({...customForm, prompt: e.target.value})} />
                 </div>
               </div>
 

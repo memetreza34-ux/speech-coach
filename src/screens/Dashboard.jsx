@@ -1,27 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { useSessionHistory } from '../useSessionHistory';
 import { computeLevel, computeStreak, modeTitle, getDailyChallenge, getSessionDate } from '../utils/speech';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Play, Target, Zap, Activity, ChevronRight, Brain, Flame } from 'lucide-react';
 
 export const DashboardScreen = () => {
   const { profile, user } = useAuth();
-  const [history, setHistory] = useState([]);
+  const { history, loading, error } = useSessionHistory(user);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchHistory = async () => {
-      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('date', 'desc'), limit(100));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => d.data());
-      setHistory(data);
-    };
-    fetchHistory();
-  }, [user]);
 
   const level = computeLevel(history);
   const streak = computeStreak(history);
@@ -169,7 +157,7 @@ export const DashboardScreen = () => {
               <Crown size={16} className="text-amber-500" />
               <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Dein Level</div>
             </div>
-            <div className="text-2xl font-serif text-slate-900">{level}</div>
+            <div className="text-2xl font-serif text-slate-900">{error ? '–' : level}</div>
           </div>
           <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
             <motion.div 
@@ -179,7 +167,7 @@ export const DashboardScreen = () => {
               transition={{ duration: 1, ease: "easeOut" }}
             />
           </div>
-          <div className="text-xs text-slate-500 text-right">Noch {sessionsToNextLevel} {sessionsToNextLevel === 1 ? 'Session' : 'Sessions'} bis Level {level + 1}</div>
+          <div className="text-xs text-slate-500 text-right">{error ? 'Fortschritt nicht verfügbar' : `Noch ${sessionsToNextLevel} ${sessionsToNextLevel === 1 ? 'Session' : 'Sessions'} bis Level ${level + 1}`}</div>
         </div>
 
         {/* Stats Grid */}
@@ -189,7 +177,7 @@ export const DashboardScreen = () => {
               <Zap size={16} className="text-amber-500" />
               <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Streak</div>
             </div>
-            <div className="text-3xl font-serif text-slate-900 mb-1">{streak}</div>
+            <div className="text-3xl font-serif text-slate-900 mb-1">{error ? '–' : streak}</div>
             <div className="text-xs text-slate-500">{streak === 1 ? 'Tag' : 'Tage'} in Folge</div>
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -203,11 +191,11 @@ export const DashboardScreen = () => {
         </div>
 
         {!profile?.isPremium && (
-          <div className="bg-slate-200 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center mb-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => navigate('/paywall')}>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Anzeige</span>
-            <div className="text-slate-700 font-medium">Befreie dich von Werbung!</div>
-            <div className="text-sm text-slate-500">Hol dir SpeechCoach Pro</div>
-          </div>
+          <button className="w-full bg-slate-200 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center mb-6 flex flex-col items-center justify-center hover:bg-slate-300 transition-colors" onClick={() => navigate('/paywall')}>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">SpeechCoach Pro</span>
+            <div className="text-slate-700 font-medium">Live-Gespräche und Kamera-Feedback</div>
+            <div className="text-sm text-slate-500">Jetzt ansehen</div>
+          </button>
         )}
 
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -238,6 +226,10 @@ export const DashboardScreen = () => {
                 </div>
               ))}
             </div>
+          ) : error ? (
+            <p className="text-sm text-rose-500 text-center py-6">Deine Sessions konnten nicht geladen werden. Prüfe deine Verbindung und lade die Seite neu.</p>
+          ) : loading ? (
+            <p className="text-sm text-slate-400 text-center py-6">Lädt…</p>
           ) : (
             <div className="text-center py-6">
               <div className="bg-slate-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">

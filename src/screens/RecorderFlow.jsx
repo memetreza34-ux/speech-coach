@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '../useGoBack';
 import { useRecorder } from '../useRecorder';
+import { useFrameCapture } from '../useFrameCapture';
 import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle, MODES } from '../utils/speech';
 import { HighlightedTranscript } from '../components/HighlightedTranscript';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { db } from '../lib/firebase';
 import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -77,8 +80,10 @@ const renderAiTip = (analysisData, profile, navigate) => {
 export const RecorderFlow = () => {
   const { modeId } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/arena');
   const { profile, user } = useAuth();
-  
+  const { addToast } = useToast();
+
   // Premium Guard
   useEffect(() => {
     const modeConfig = MODES.find(m => m.id === modeId);
@@ -92,10 +97,8 @@ export const RecorderFlow = () => {
   const [activeTab, setActiveTab] = useState('coach'); // 'coach' | 'transcript'
   
   const [useVideo, setUseVideo] = useState(false);
-  const videoRef = React.useRef(null);
-  const [frames, setFrames] = useState([]);
-  const frameIntervalRef = React.useRef(null);
-  
+  const videoRef = useRef(null);
+
   const isCustom = modeId.startsWith('custom_');
   const customModeData = isCustom ? profile?.customModes?.find(m => m.id === modeId) : null;
   
@@ -118,24 +121,7 @@ export const RecorderFlow = () => {
     }
   }, [stream]);
 
-  useEffect(() => {
-    if (isRecording && useVideo && stream) {
-      frameIntervalRef.current = setInterval(() => {
-        if (videoRef.current && frames.length < 5) { // max 5 frames to save payload
-          const canvas = document.createElement('canvas');
-          canvas.width = 320;
-          canvas.height = 240;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const base64 = canvas.toDataURL('image/jpeg', 0.6);
-          setFrames(prev => prev.length < 5 ? [...prev, base64] : prev);
-        }
-      }, 8000); // 1 frame every 8 seconds
-    } else {
-      clearInterval(frameIntervalRef.current);
-    }
-    return () => clearInterval(frameIntervalRef.current);
-  }, [isRecording, useVideo, stream, frames.length]);
+  const { capture, takeFrames } = useFrameCapture(videoRef, isRecording && useVideo && !!stream);
 
   const stoppingRef = useRef(false);
   const toggleRecording = async () => {
@@ -143,17 +129,20 @@ export const RecorderFlow = () => {
       // Sperre gegen Doppelklick: sonst würde die Session doppelt gespeichert.
       if (stoppingRef.current) return;
       stoppingRef.current = true;
+      if (useVideo) capture(); // letztes Bild, bevor die Kamera stoppt
+      const frames = takeFrames();
       const recording = await stop();
       setSubScreen('loading');
-      
+
       const result = await analyzeTranscript({ ...recording, frames }, modeId, profile);
       const fullResult = { ...result, audioUrl: recording.audioUrl, transcript: recording.transcript };
       setAnalysisData(fullResult);
-      
-      // Save to Firebase
+
+      // Nicht auf den Server warten: offline würde das Promise sonst ewig hängen und die
+      // Auswertung nie erscheinen. Firestore überträgt die Session, sobald wieder Netz da ist.
       if (user) {
         const sessionRef = doc(collection(db, 'users', user.uid, 'sessions'));
-        await setDoc(sessionRef, {
+        setDoc(sessionRef, {
           mode: modeId,
           modeLabel: displayTitle,
           date: new Date().toISOString(), // Fallback for local quick render
@@ -172,6 +161,9 @@ export const RecorderFlow = () => {
           aiStatus: result.aiStatus || 'not_available',
           transcript: recording.transcript,
           durationMs: recording.durationMs
+        }).catch(e => {
+          console.error('Session konnte nicht gespeichert werden:', e);
+          addToast('Die Session konnte nicht gespeichert werden.', 'error');
         });
       }
       
@@ -196,7 +188,7 @@ export const RecorderFlow = () => {
       {subScreen === 'recorder' && (
         <motion.div key="rec" className="fixed inset-0 z-50 bg-white flex flex-col px-6 py-10" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
           <div className="max-w-md mx-auto w-full flex flex-col h-full">
-            <button className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 mb-10 transition-colors w-max" onClick={() => navigate(-1)}>
+            <button className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 mb-10 transition-colors w-max" onClick={goBack}>
               <ChevronLeft size={18} strokeWidth={2.5} /> Abbrechen
             </button>
             <div className="text-xs font-bold text-indigo-600 tracking-widest uppercase mb-3">{displayTitle}</div>
@@ -262,7 +254,7 @@ export const RecorderFlow = () => {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <MetricCard label="Score" value={analysisData.confidenceScore === null ? '-' : (analysisData.confidenceScore ?? 0)} hint="Souveränität (0-100)" alert={analysisData.confidenceScore !== null && analysisData.confidenceScore < 50} />
               <MetricCard label="Tempo" value={analysisData.wpm} hint={`WPM · ${analysisData.pacingStatus}`} />
-              <MetricCard label="Füllwörter" value={analysisData.fillers} alert={analysisData.fillers > 5} />
+              <MetricCard label="Füllwörter" value={analysisData.fillers ?? '–'} alert={analysisData.fillers > 5} />
               <MetricCard label="Pausen" value={analysisData.pauseCount ?? 0} hint={analysisData.longestPauseMs ? `längste ${(analysisData.longestPauseMs / 1000).toFixed(1)}s` : null} />
             </div>
             
@@ -296,7 +288,7 @@ export const RecorderFlow = () => {
               ) : (
                 <>
                   <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-4">Gesprochener Text</div>
-                  <HighlightedTranscript transcript={analysisData.transcript} />
+                  <HighlightedTranscript transcript={analysisData.transcript} mode={modeId} />
                 </>
               )}
             </div>

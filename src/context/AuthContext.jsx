@@ -131,9 +131,11 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (updates) => {
     if (!user) return;
     try {
-      const newProfile = { ...profile, ...updates };
-      await setDoc(doc(db, 'users', user.uid), newProfile, { merge: true });
-      setProfile(newProfile);
+      // Nur die geänderten Felder schreiben: Das ganze Profil enthielte auch isPremium und
+      // customModes. Hat der Server die inzwischen geändert (anderes Gerät), lehnen die
+      // Firestore-Regeln das Speichern sonst ab.
+      await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+      setProfile(prev => ({ ...prev, ...updates }));
     } catch (error) {
       console.error("Profile Update Error:", error);
       throw error;

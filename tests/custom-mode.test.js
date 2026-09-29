@@ -10,9 +10,7 @@ const { getMock, runTransactionMock } = vi.hoisted(() => {
     // In our tests we inject mockDbState behavior through getMock and transaction
     const transaction = {
       get: getMock,
-      update: vi.fn((_ref, data) => {
-        // mock update
-      })
+      update: vi.fn()
     };
     return cb(transaction);
   });

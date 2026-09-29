@@ -67,7 +67,7 @@ describe('Backend API Tests', () => {
     process.env.FREE_DAILY_ANALYSES = '5';
     process.env.PRO_DAILY_ANALYSES = '50';
     app = createApp();
-    app.use((err, req, res, next) => {
+    app.use((err, req, res, _next) => {
       res.status(500).json({ error: 'unhandled', details: err.message });
     });
     request = supertest(app);
@@ -185,6 +185,33 @@ describe('Backend API Tests', () => {
       expect(sentPrompt()).toContain('Fluch und Segen');
     });
 
+    it('accepts an answer without confidenceScore (optional in the schema)', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 2, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x" } }) }] } }]
+        })
+      });
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
+    });
+
+    it('accepts long transcripts such as a full live interview', async () => {
+      okGemini();
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, transcript: 'Wort '.repeat(3000) });
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects transcripts above the hard limit without consuming quota', async () => {
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
+        .send({ ...validBody, transcript: 'x'.repeat(30001) });
+      expect(res.status).toBe(400);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockUsage).toBe(0);
+    });
+
     it('rejects unknown modes without consuming quota', async () => {
       const res = await request.post('/api/analyze').set('Authorization', 'Bearer token')
         .send({ ...validBody, mode: 'made_up', customPrompt: 'Premium-Szenario' });
@@ -268,6 +295,20 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(1);
     });
 
+    it('shortens very long answers instead of rejecting them', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ feedback: "x", isFinished: false, interviewerSpeech: "x" }) }] } }]
+        })
+      });
+      const res = await request.post('/api/interview').set('Authorization', 'Bearer token')
+        .send({ messages: [{ role: 'user', text: 'a'.repeat(8000) }] });
+      expect(res.status).toBe(200);
+      const sent = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(sent.length).toBe(5000);
+    });
+
     it('refunds on invalid AI response (missing interviewerSpeech)', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
@@ -323,6 +364,37 @@ describe('Backend API Tests', () => {
       expect(mockUsage).toBe(1);
     });
     
+    it('sends sessions oldest first, regardless of client order', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A"], improvements: ["A"] }) }] } }] })
+      });
+      const history = [
+        { date: '2026-09-03T10:00:00.000Z', wpm: 150 },
+        { date: '2026-09-01T10:00:00.000Z', wpm: 100 },
+        { date: '2026-09-02T10:00:00.000Z', wpm: 125 }
+      ];
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send({ history });
+      expect(res.status).toBe(200);
+      const prompt = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(prompt.indexOf('WPM: 100')).toBeLessThan(prompt.indexOf('WPM: 125'));
+      expect(prompt.indexOf('WPM: 125')).toBeLessThan(prompt.indexOf('WPM: 150'));
+    });
+
+    it('keeps only the newest 50 sessions', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ insight: "X", strengths: ["A"], improvements: ["A"] }) }] } }] })
+      });
+      const history = Array.from({ length: 60 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), wpm: 100 + i }));
+      const res = await request.post('/api/analyze-progress').set('Authorization', 'Bearer token').send({ history });
+      expect(res.status).toBe(200);
+      const prompt = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+      expect(prompt).not.toContain('WPM: 109,');
+      expect(prompt).toContain('WPM: 110,');
+      expect(prompt).toContain('WPM: 159,');
+    });
+
     it('refunds on invalid output (insight empty)', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,

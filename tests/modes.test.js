@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MODES } from '../src/shared/modes';
 import { getPromptForMode } from '../src/utils/speech';
+import { MODE_ICONS } from '../src/components/modeIcons';
 
 describe('Modes and Prompts Consistency', () => {
   it('has unique ids', () => {
@@ -36,6 +37,12 @@ describe('Modes and Prompts Consistency', () => {
         // An interactive prompt should ideally tell the AI to act as a counterpart
         expect(prompt.length).toBeGreaterThan(10);
       }
+    }
+  });
+
+  it('every mode icon is available in the Arena icon map', () => {
+    for (const mode of MODES) {
+      expect(MODE_ICONS[mode.icon], `${mode.id}: ${mode.icon}`).toBeDefined();
     }
   });
 

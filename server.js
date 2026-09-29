@@ -33,7 +33,7 @@ const requireAuth = async (req, res, next) => {
     const decodedToken = await getAuth().verifyIdToken(token);
     req.user = decodedToken;
     next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
@@ -58,6 +58,10 @@ export function createApp() {
   const INTERACTIVE_MODES = PREMIUM_MODES_CONFIG.filter(m => m.category === 'interactive').map(m => m.id);
   const KNOWN_MODES = new Set(PREMIUM_MODES_CONFIG.map(m => m.id));
   const INTERVIEW_EVAL_PROMPT = 'Bewerte das Live-Interview abschließend und gib einen Gesamt-Score.';
+  // ~35 Min. Sprechen — ein komplettes Live-Interview muss hineinpassen.
+  const MAX_TRANSCRIPT_CHARS = 30000;
+  // Längere Antworten werden gekürzt statt abgelehnt: sonst scheitert auch "Erneut versuchen" immer wieder.
+  const MAX_MESSAGE_CHARS = 5000;
 
   // Das Szenario kommt aus der Modus-Liste bzw. dem Nutzer-Dokument, nie als freier Text vom Client.
   // Sonst könnte ein Gratis-Nutzer einen Premium-Text unter einer Gratis-ID schicken.
@@ -143,6 +147,58 @@ export function createApp() {
       console.error(`Error refunding quota for user ${uid}, type ${type}:`, e);
     }
   };
+
+  const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+  // Ruft Gemini mit JSON-Antwort auf und gibt das geprüfte Ergebnis zurück. Bei jedem Fehler
+  // wird die verbrauchte Quota zurückgebucht, die Fehlerantwort gesendet und null zurückgegeben.
+  // `validate` liefert für eine unbrauchbare Antwort den Grund, sonst null.
+  const callGemini = async (req, res, { quotaType, body, timeoutMs, validate, internalError }) => {
+    const fail = async (status, payload) => {
+      await safeRefundQuota(req.user.uid, quotaType);
+      res.status(status).json(payload);
+      return null;
+    };
+    const invalid = (details) => fail(502, { error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        return fail(502, { error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
+      }
+
+      const data = await response.json();
+      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!resultText) {
+        return fail(502, { error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).', code: 'INVALID_AI_RESPONSE' });
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch {
+        return invalid('Ungültiges JSON-Format');
+      }
+      const problem = validate(parsed);
+      return problem ? invalid(problem) : parsed;
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        return fail(504, { error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
+      }
+      console.error(`AI Error (${quotaType}):`, e);
+      return fail(500, { error: internalError });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
 
   app.use(express.json({ limit: '2mb' })); // Reduced from 10mb for better security
   
@@ -379,7 +435,7 @@ export function createApp() {
     }
 
     // VALIDATION BEFORE QUOTA
-    if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > 10000) {
+    if (typeof transcript !== 'string' || !transcript.trim() || transcript.length > MAX_TRANSCRIPT_CHARS) {
       return res.status(400).json({ error: 'Transkript fehlt, ist leer oder zu lang.' });
     }
     
@@ -400,7 +456,6 @@ export function createApp() {
     const profileAge = typeof safeProfile.age === 'string' ? safeProfile.age.slice(0, 10) : '';
     const profileHobbies = typeof safeProfile.hobbies === 'string' ? safeProfile.hobbies.slice(0, 300) : '';
 
-    const safeTranscript = transcript.slice(0, 10000);
     const m = typeof metrics === 'object' && metrics ? metrics : {};
     
     if (m.wpm !== undefined && (typeof m.wpm !== 'number' || m.wpm < 0 || m.wpm > 500)) return res.status(400).json({ error: 'Ungültiger wpm-Wert.' });
@@ -434,7 +489,7 @@ Gemessene Werte aus der Audioaufnahme (diese sind bereits ermittelt, du musst si
 - Redeanteil: ${speakingRatio}% der Aufnahmezeit
 - Lautstärkedynamik: ${dynamics} (unter 35 = monoton, über 75 = sehr bewegt)
 
-Transkript: "${safeTranscript}"
+Transkript: "${transcript}"
 
 ${hasFrames ? "Du erhältst zusätzlich Einzelbilder aus der Webcam des Nutzers während des Sprechens. Beurteile anhand dieser Bilder Körpersprache, Gestik und Blickkontakt (Wirkt die Person offen? Schaut sie in die Kamera?)." : "Keine Videobilder verfügbar."}
 
@@ -460,107 +515,48 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
       });
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 18000); // 18 seconds timeout
-
-    try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: { 
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                fillers: { type: 'INTEGER', description: 'Anzahl der erkannten Füllwörter' },
-                confidenceScore: { type: 'INTEGER', description: 'Bewertung von 0 bis 100, oder null', nullable: true },
-                aiTip: {
-                  type: 'OBJECT',
-                  properties: {
-                    summary: { type: 'STRING' },
-                    strengths: { type: 'STRING' },
-                    improvements: { type: 'STRING' },
-                    actionTip: { type: 'STRING' },
-                    bodyLanguage: { type: 'STRING', nullable: true }
-                  },
-                  required: ['summary', 'strengths', 'improvements', 'actionTip']
-                }
-              },
-              required: ['fillers', 'aiTip']
-            }
+    const parsed = await callGemini(req, res, {
+      quotaType: 'analyze',
+      timeoutMs: 18000,
+      internalError: 'Interner Fehler bei der KI-Analyse.',
+      body: {
+        contents: [{ parts }],
+        generationConfig: { 
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              fillers: { type: 'INTEGER', description: 'Anzahl der erkannten Füllwörter' },
+              confidenceScore: { type: 'INTEGER', description: 'Bewertung von 0 bis 100, oder null', nullable: true },
+              aiTip: {
+                type: 'OBJECT',
+                properties: {
+                  summary: { type: 'STRING' },
+                  strengths: { type: 'STRING' },
+                  improvements: { type: 'STRING' },
+                  actionTip: { type: 'STRING' },
+                  bodyLanguage: { type: 'STRING', nullable: true }
+                },
+                required: ['summary', 'strengths', 'improvements', 'actionTip']
+              }
+            },
+            required: ['fillers', 'aiTip']
           }
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
+        }
+      },
+      validate: (p) => {
+        if (typeof p.fillers !== 'number' || p.fillers < 0) return 'fillers missing or invalid';
+        // confidenceScore ist im Schema optional — fehlt er, gilt er wie null als "nicht bewertbar".
+        if (p.confidenceScore != null && (typeof p.confidenceScore !== 'number' || p.confidenceScore < 0 || p.confidenceScore > 100)) return 'confidenceScore invalid';
+        if (!p.aiTip || typeof p.aiTip !== 'object') return 'aiTip missing or invalid';
+        for (const key of ['summary', 'strengths', 'improvements', 'actionTip']) {
+          if (typeof p.aiTip[key] !== 'string') return `${key} missing`;
+        }
+        if (p.aiTip.bodyLanguage != null && typeof p.aiTip.bodyLanguage !== 'string') return 'bodyLanguage invalid';
+        return null;
       }
-
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert (evtl. Sicherheitsfilter).', code: 'INVALID_AI_RESPONSE' });
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(resultText);
-      } catch (e) {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
-      }
-      
-      // Strict Output Validation
-      if (typeof parsed.fillers !== 'number' || parsed.fillers < 0) {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'fillers missing or invalid' });
-      }
-      if (parsed.confidenceScore !== null && (typeof parsed.confidenceScore !== 'number' || parsed.confidenceScore < 0 || parsed.confidenceScore > 100)) {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'confidenceScore invalid' });
-      }
-      if (!parsed.aiTip || typeof parsed.aiTip !== 'object') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'aiTip missing or invalid' });
-      }
-      if (typeof parsed.aiTip.summary !== 'string') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'summary missing' });
-      }
-      if (typeof parsed.aiTip.strengths !== 'string') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'strengths missing' });
-      }
-      if (typeof parsed.aiTip.improvements !== 'string') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'improvements missing' });
-      }
-      if (typeof parsed.aiTip.actionTip !== 'string') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'actionTip missing' });
-      }
-      if (parsed.aiTip.bodyLanguage !== null && parsed.aiTip.bodyLanguage !== undefined && typeof parsed.aiTip.bodyLanguage !== 'string') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'bodyLanguage invalid' });
-      }
-
-      return res.status(200).json(parsed);
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') {
-        await safeRefundQuota(req.user.uid, 'analyze');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
-      }
-      console.error('AI Error:', e);
-      await safeRefundQuota(req.user.uid, 'analyze');
-      return res.status(500).json({ error: 'Interner Fehler bei der KI-Analyse.' });
-    }
+    });
+    if (parsed) return res.status(200).json(parsed);
   });
 
   // API Route for Interactive Interview Mode
@@ -593,7 +589,7 @@ Achte auf ein motivierendes, aber sehr ehrliches Feedback.`;
     
     for (const msg of messages) {
       if (msg.role !== 'user' && msg.role !== 'model') return res.status(400).json({ error: 'Ungültige role.' });
-      if (typeof msg.text !== 'string' || msg.text.length > 2000) return res.status(400).json({ error: 'Ungültiger text.' });
+      if (typeof msg.text !== 'string') return res.status(400).json({ error: 'Ungültiger text.' });
     }
 
     
@@ -643,7 +639,7 @@ Gib immer strikt dieses JSON Format zurück:
 
     const formattedMessages = messages.map(m => ({
       role: m.role,
-      parts: [{ text: m.text }]
+      parts: [{ text: m.text.slice(0, MAX_MESSAGE_CHARS) }]
     }));
 
     if (hasFrames) {
@@ -658,78 +654,34 @@ Gib immer strikt dieses JSON Format zurück:
       }
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: formattedMessages,
-          generationConfig: { 
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                interviewerSpeech: { type: 'STRING' },
-                feedback: { type: 'STRING' },
-                isFinished: { type: 'BOOLEAN' }
-              },
-              required: ['interviewerSpeech', 'feedback', 'isFinished']
-            }
+    const parsed = await callGemini(req, res, {
+      quotaType: 'interviewTurn',
+      timeoutMs: 15000,
+      internalError: 'Interner Fehler beim Interview.',
+      body: {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: formattedMessages,
+        generationConfig: { 
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              interviewerSpeech: { type: 'STRING' },
+              feedback: { type: 'STRING' },
+              isFinished: { type: 'BOOLEAN' }
+            },
+            required: ['interviewerSpeech', 'feedback', 'isFinished']
           }
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
+        }
+      },
+      validate: (p) => {
+        if (typeof p.interviewerSpeech !== 'string' || !p.interviewerSpeech.trim()) return 'interviewerSpeech missing';
+        if (typeof p.feedback !== 'string') return 'feedback missing';
+        if (typeof p.isFinished !== 'boolean') return 'isFinished missing';
+        return null;
       }
-
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(resultText);
-      } catch (e) {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
-      }
-
-      // Validate output
-      if (typeof parsed.interviewerSpeech !== 'string' || !parsed.interviewerSpeech.trim()) {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'interviewerSpeech missing' });
-      }
-      if (typeof parsed.feedback !== 'string') {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'feedback missing' });
-      }
-      if (typeof parsed.isFinished !== 'boolean') {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'isFinished missing' });
-      }
-
-      return res.status(200).json(parsed);
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') {
-        await safeRefundQuota(req.user.uid, 'interviewTurn');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
-      }
-      console.error('AI Error (Interview):', e);
-      await safeRefundQuota(req.user.uid, 'interviewTurn');
-      return res.status(500).json({ error: 'Interner Fehler beim Interview.' });
-    }
+    });
+    if (parsed) return res.status(200).json(parsed);
   });
 
   // API Route for Long-Term Progress Analysis
@@ -742,7 +694,7 @@ Gib immer strikt dieses JSON Format zurück:
       return res.status(400).json({ error: 'Keine Historie vorhanden oder zu lang.' });
     }
 
-    const sanitizedHistory = history.slice(0, 50).map(s => ({
+    const sanitizedHistory = history.map(s => ({
       mode: typeof s.mode === 'string' ? s.mode.slice(0, 50) : 'unbekannt',
       durationMs: typeof s.durationMs === 'number' ? Math.min(Math.max(s.durationMs, 0), 3600000) : 0,
       wpm: typeof s.wpm === 'number' ? Math.min(Math.max(s.wpm, 0), 500) : 0,
@@ -750,6 +702,11 @@ Gib immer strikt dieses JSON Format zurück:
       confidenceScore: typeof s.confidenceScore === 'number' ? Math.min(Math.max(s.confidenceScore, 0), 100) : null,
       date: typeof s.date === 'string' ? s.date.slice(0, 30) : (typeof s.timestamp === 'number' ? new Date(s.timestamp).toISOString() : new Date().toISOString())
     }));
+    // Die KI liest "Session 1" als die erste — daher die neuesten 50 nehmen und chronologisch sortieren,
+    // egal in welcher Reihenfolge der Client sie schickt.
+    const sessionTime = (s) => Date.parse(s.date) || 0;
+    sanitizedHistory.sort((a, b) => sessionTime(b) - sessionTime(a));
+    const recentHistory = sanitizedHistory.slice(0, 50).reverse();
 
     const userDoc = await db.collection('users').doc(req.user.uid).get();
     const isPremium = userDoc.exists && userDoc.data().isPremium === true;
@@ -761,7 +718,7 @@ Gib immer strikt dieses JSON Format zurück:
     const safeProfile = profile && typeof profile === 'object' ? profile : {};
     
     // Prepare history summary
-    const historySummary = sanitizedHistory.map((session, i) => {
+    const historySummary = recentHistory.map((session, i) => {
       const date = new Date(session.date).toLocaleDateString('de-DE');
       return `Session ${i + 1} (${date}): Modus: ${session.mode}, Dauer: ${session.durationMs}ms, WPM: ${session.wpm}, Füllwörter: ${session.fillers}, Confidence Score: ${session.confidenceScore ?? '?'}`;
     }).join('\n');
@@ -769,92 +726,46 @@ Gib immer strikt dieses JSON Format zurück:
     const promptText = `Du bist ein hochqualifizierter KI-Kommunikationstrainer. Der Nutzer hat mich gebeten, seinen Langzeit-Fortschritt zu analysieren.
 Nutzer-Profil: Name: ${String(safeProfile.name || 'Nutzer').slice(0, 50)}, Rolle: ${String(safeProfile.role || '').slice(0, 50)}.
 
-Hier sind die letzten Trainings-Aufzeichnungen des Nutzers:
+Hier sind die letzten Trainings-Aufzeichnungen des Nutzers, chronologisch sortiert (Session 1 ist die älteste, die letzte Session die neueste):
 ${historySummary}
 
 Bitte schreibe eine detaillierte, motivierende, aber sehr konkrete KI-Langzeitanalyse.
 Erkenne Muster (z.B. "Du wirst immer schneller, wenn...", "Deine Füllwörter haben im Vergleich zu den ersten Sessions abgenommen").`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-
-    try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { 
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                insight: { type: 'STRING', description: 'Ein kurzer motivierender Hauptgedanke oder Erkenntnis (1-2 Sätze)' },
-                strengths: {
-                  type: 'ARRAY',
-                  items: { type: 'STRING' }
-                },
-                improvements: {
-                  type: 'ARRAY',
-                  items: { type: 'STRING' }
-                }
+    const isStringArray = (arr) => Array.isArray(arr) && arr.length <= 3 && arr.every(s => typeof s === 'string' && s.trim() !== '' && s.length < 500);
+    const parsed = await callGemini(req, res, {
+      quotaType: 'progress',
+      timeoutMs: 20000,
+      internalError: 'Interner Fehler bei der Langzeitanalyse.',
+      body: {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { 
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              insight: { type: 'STRING', description: 'Ein kurzer motivierender Hauptgedanke oder Erkenntnis (1-2 Sätze)' },
+              strengths: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
               },
-              required: ['insight', 'strengths', 'improvements']
-            }
+              improvements: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
+              }
+            },
+            required: ['insight', 'strengths', 'improvements']
           }
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
+        }
+      },
+      validate: (p) => {
+        if (typeof p.insight !== 'string' || !p.insight.trim() || p.insight.length > 2000) return 'invalid insight';
+        if (!isStringArray(p.strengths)) return 'invalid strengths';
+        if (!isStringArray(p.improvements)) return 'invalid improvements';
+        return null;
       }
-
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(resultText);
-      } catch (e) {
-        await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
-      }
-      
-      // Strict Array Check
-      const isStringArray = (arr) => Array.isArray(arr) && arr.length <= 3 && arr.every(s => typeof s === 'string' && s.trim() !== '' && s.length < 500);
-
-      if (typeof parsed.insight !== 'string' || !parsed.insight.trim() || parsed.insight.length > 2000) {
-         await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid insight' });
-      }
-      if (!isStringArray(parsed.strengths)) {
-         await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid strengths' });
-      }
-      if (!isStringArray(parsed.improvements)) {
-         await safeRefundQuota(req.user.uid, 'progress');
-         return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'invalid improvements' });
-      }
-
-      return res.status(200).json(parsed);
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') {
-        await safeRefundQuota(req.user.uid, 'progress');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
-      }
-      console.error('AI Error (Progress):', e);
-      await safeRefundQuota(req.user.uid, 'progress');
-      return res.status(500).json({ error: 'Interner Fehler bei der Langzeitanalyse.' });
-    }
+    });
+    if (parsed) return res.status(200).json(parsed);
   });
 
   // API Route for Persona Analysis
@@ -888,72 +799,30 @@ description (1-2 Sätze Beschreibung, wie dieser Typ üblicherweise spricht)
 superpower (Was ist vermutlich die größte Stärke dieses Typs?)
 trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: { 
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                archetype: { type: 'STRING' },
-                description: { type: 'STRING' },
-                superpower: { type: 'STRING' },
-                trap: { type: 'STRING' }
-              },
-              required: ['archetype', 'description', 'superpower', 'trap']
-            }
+    const isValidString = (s) => typeof s === 'string' && s.trim() !== '' && s.length < 500;
+    const parsed = await callGemini(req, res, {
+      quotaType: 'persona',
+      timeoutMs: 15000,
+      internalError: 'Interner Fehler bei der Persona-Analyse.',
+      body: {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { 
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              archetype: { type: 'STRING' },
+              description: { type: 'STRING' },
+              superpower: { type: 'STRING' },
+              trap: { type: 'STRING' }
+            },
+            required: ['archetype', 'description', 'superpower', 'trap']
           }
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'KI-Analyse fehlgeschlagen (Upstream-Fehler).', code: 'UPSTREAM_ERROR' });
-      }
-
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'Die KI hat keine verwertbare Antwort geliefert.', code: 'INVALID_AI_RESPONSE' });
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(resultText);
-      } catch (e) {
-        await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Ungültiges JSON-Format' });
-      }
-
-      const isValidString = (s) => typeof s === 'string' && s.trim() !== '' && s.length < 500;
-      
-      if (!isValidString(parsed.archetype) || !isValidString(parsed.description) || !isValidString(parsed.superpower) || !isValidString(parsed.trap)) {
-        await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(502).json({ error: 'Die KI hat eine ungültige Antwort geliefert.', code: 'INVALID_AI_RESPONSE', details: 'Schema mismatch or fields too long/empty' });
-      }
-
-      return res.status(200).json(parsed);
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') {
-        await safeRefundQuota(req.user.uid, 'persona');
-        return res.status(504).json({ error: 'Zeitüberschreitung bei der KI-Analyse.', code: 'AI_TIMEOUT' });
-      }
-      console.error('AI Error (Persona):', e);
-      await safeRefundQuota(req.user.uid, 'persona');
-      return res.status(500).json({ error: 'Interner Fehler bei der Persona-Analyse.' });
-    }
+        }
+      },
+      validate: (p) => ([p.archetype, p.description, p.superpower, p.trap].every(isValidString) ? null : 'Schema mismatch or fields too long/empty')
+    });
+    if (parsed) return res.status(200).json(parsed);
   });
 
   return app;
@@ -961,7 +830,8 @@ trap (In welche Kommunikations-Falle tappt dieser Typ am häufigsten?)`;
 
 export async function startServer() {
   const app = createApp();
-  const PORT = 3000;
+  // Cloud Run gibt den Port über PORT vor (Standard 8080).
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

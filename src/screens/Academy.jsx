@@ -231,7 +231,7 @@ export const AcademyScreen = () => {
                     );
                   }
                   return (
-                    <p key={idx} className="text-slate-700 leading-relaxed mb-6 font-medium text-[17px]">
+                    <p key={idx} className="text-slate-700 leading-relaxed mb-6 font-medium text-[17px] whitespace-pre-line">
                       {paragraph}
                     </p>
                   );

@@ -1,14 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useGoBack } from '../useGoBack';
 
 const Page = ({ title, content }) => {
-  const navigate = useNavigate();
+  const goBack = useGoBack('/');
   return (
     <motion.div className="flex flex-col min-h-screen bg-slate-50 px-6 py-10" initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
       <div className="max-w-md mx-auto w-full">
-        <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium mb-8">
+        <button onClick={goBack} className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium mb-8">
           <ChevronLeft size={18} /> Zurück
         </button>
         <h1 className="text-3xl font-serif text-slate-900 mb-6">{title}</h1>
@@ -22,10 +22,17 @@ const Page = ({ title, content }) => {
 };
 
 export const PrivacyScreen = () => (
-  <Page title="Datenschutzerklärung" content={<>
-    <p>Wir nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Wir behandeln Ihre personenbezogenen Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften sowie dieser Datenschutzerklärung.</p>
-    <p>Die Nutzung unserer App ist in der Regel ohne Angabe personenbezogener Daten möglich. Soweit auf unseren Seiten personenbezogene Daten (beispielsweise Name, Anschrift oder E-Mail-Adressen) erhoben werden, erfolgt dies, soweit möglich, stets auf freiwilliger Basis.</p>
-  </>} />
+  <Page title="Datenschutzerklärung" content={<div className="space-y-4">
+    {/* Beschreibt die Datenflüsse, die der Code tatsächlich hat. Ersetzt keine rechtliche Prüfung. */}
+    <p><strong>Verantwortlich:</strong> siehe Impressum.</p>
+    <p><strong>Anmeldung:</strong> Du meldest dich mit deinem Google-Konto über Firebase Authentication (Google) an. Dabei verarbeiten wir Name, E-Mail-Adresse und eine Nutzer-ID.</p>
+    <p><strong>Gespeicherte Daten:</strong> In Google Cloud Firestore speichern wir deine Profilangaben (Name, Rolle, Alter, Interessen, Trainingsziel), deine Trainings-Sessions (Transkript, Messwerte, KI-Feedback), deine eigenen Szenarien und tägliche Nutzungszähler.</p>
+    <p><strong>Spracherkennung:</strong> Die Live-Transkription nutzt die Spracherkennung deines Browsers. Je nach Browser wird das Audio dafür an dessen Anbieter übertragen (z. B. Google bei Chrome, Apple bei Safari).</p>
+    <p><strong>Audioaufnahme:</strong> Die Aufnahme zum Nachhören bleibt in deinem Browser und wird nicht hochgeladen.</p>
+    <p><strong>KI-Auswertung:</strong> Für Feedback, Live-Gespräche, Langzeitanalyse und Persona senden wir Transkript, Messwerte und deine Profilangaben (Name, Rolle, Alter, Interessen) an die Google Gemini API.</p>
+    <p><strong>Kamera (Pro, optional):</strong> Ist die Kamera an, gehen bis zu fünf Standbilder pro Antwort zur Auswertung der Körpersprache an die Google Gemini API. Die App speichert diese Bilder nicht.</p>
+    <p><strong>Löschen:</strong> Im Profil kannst du jederzeit deine Trainingsdaten oder deinen gesamten Account löschen.</p>
+  </div>} />
 );
 
 export const ImprintScreen = () => (
