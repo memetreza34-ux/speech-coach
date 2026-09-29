@@ -67,7 +67,7 @@ describe('Backend API Tests', () => {
     process.env.FREE_DAILY_ANALYSES = '5';
     process.env.PRO_DAILY_ANALYSES = '50';
     app = createApp();
-    app.use((err, req, res, next) => {
+    app.use((err, req, res, _next) => {
       res.status(500).json({ error: 'unhandled', details: err.message });
     });
     request = supertest(app);
@@ -183,6 +183,18 @@ describe('Backend API Tests', () => {
       expect(res.status).toBe(200);
       expect(sentPrompt()).not.toContain('Hochzeitsrede');
       expect(sentPrompt()).toContain('Fluch und Segen');
+    });
+
+    it('accepts an answer without confidenceScore (optional in the schema)', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ fillers: 2, aiTip: { summary: "x", strengths: "x", improvements: "x", actionTip: "x" } }) }] } }]
+        })
+      });
+      const res = await request.post('/api/analyze').set('Authorization', 'Bearer token').send(validBody);
+      expect(res.status).toBe(200);
+      expect(mockUsage).toBe(1);
     });
 
     it('accepts long transcripts such as a full live interview', async () => {

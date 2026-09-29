@@ -6,13 +6,18 @@ let currentUsage = 0;
 
 const { getMock, runTransactionMock } = vi.hoisted(() => {
   const getMock = vi.fn();
-  const runTransactionMock = vi.fn(async (cb) => {
+  // Echte Firestore-Transaktionen laufen nicht verschränkt (bei Konflikten wiederholt Firestore sie).
+  // Ohne diese Warteschlange konnten sich zwei get/set-Paare überlappen → der Test war flaky.
+  let queue = Promise.resolve();
+  const runTransactionMock = vi.fn((cb) => {
     const transaction = {
       get: async () => ({ exists: true, data: () => ({ analyze: currentUsage }) }),
       set: (ref, data) => { currentUsage = data.analyze; },
       update: vi.fn()
     };
-    return cb(transaction);
+    const run = queue.then(() => cb(transaction));
+    queue = run.catch(() => {});
+    return run;
   });
   return { getMock, runTransactionMock };
 });
