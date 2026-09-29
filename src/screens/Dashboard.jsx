@@ -191,11 +191,11 @@ export const DashboardScreen = () => {
         </div>
 
         {!profile?.isPremium && (
-          <div className="bg-slate-200 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center mb-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => navigate('/paywall')}>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Anzeige</span>
-            <div className="text-slate-700 font-medium">Befreie dich von Werbung!</div>
-            <div className="text-sm text-slate-500">Hol dir SpeechCoach Pro</div>
-          </div>
+          <button className="w-full bg-slate-200 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center mb-6 flex flex-col items-center justify-center hover:bg-slate-300 transition-colors" onClick={() => navigate('/paywall')}>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">SpeechCoach Pro</span>
+            <div className="text-slate-700 font-medium">Live-Gespräche und Kamera-Feedback</div>
+            <div className="text-sm text-slate-500">Jetzt ansehen</div>
+          </button>
         )}
 
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">

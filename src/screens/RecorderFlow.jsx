@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Square, ChevronLeft, Mic, Loader2, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '../useGoBack';
 import { useRecorder } from '../useRecorder';
 import { useFrameCapture } from '../useFrameCapture';
 import { analyzeTranscript, getPromptForMode, getLocaleForMode, modeTitle, MODES } from '../utils/speech';
@@ -79,6 +80,7 @@ const renderAiTip = (analysisData, profile, navigate) => {
 export const RecorderFlow = () => {
   const { modeId } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/arena');
   const { profile, user } = useAuth();
   const { addToast } = useToast();
 
@@ -186,7 +188,7 @@ export const RecorderFlow = () => {
       {subScreen === 'recorder' && (
         <motion.div key="rec" className="fixed inset-0 z-50 bg-white flex flex-col px-6 py-10" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
           <div className="max-w-md mx-auto w-full flex flex-col h-full">
-            <button className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 mb-10 transition-colors w-max" onClick={() => navigate(-1)}>
+            <button className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 mb-10 transition-colors w-max" onClick={goBack}>
               <ChevronLeft size={18} strokeWidth={2.5} /> Abbrechen
             </button>
             <div className="text-xs font-bold text-indigo-600 tracking-widest uppercase mb-3">{displayTitle}</div>

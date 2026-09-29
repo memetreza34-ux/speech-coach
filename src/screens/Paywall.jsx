@@ -3,12 +3,12 @@ import { motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useNavigate } from 'react-router-dom';
+import { useGoBack } from '../useGoBack';
 
 export const PaywallScreen = () => {
   const { profile, user } = useAuth();
   const { addToast } = useToast();
-  const navigate = useNavigate();
+  const goBack = useGoBack('/dashboard');
   const [loading, setLoading] = React.useState(false);
 
   const handleSubscribe = async () => {
@@ -25,8 +25,10 @@ export const PaywallScreen = () => {
         // Force reload to get updated profile from Firestore
         window.location.href = '/arena';
       } else {
-        const data = await res.json();
-        addToast(`Upgrade fehlgeschlagen: ${data.error || 'Unbekannter Fehler'}. Hinweis: Setze ALLOW_DEMO_PREMIUM=true in deinen Umgebungsvariablen.`, 'error');
+        const data = await res.json().catch(() => ({}));
+        // Hinweis für Entwickler nur in der Konsole — Nutzer sollen keine Server-Variablen sehen.
+        console.warn('Upgrade fehlgeschlagen:', data.error, '(Demo-Upgrade braucht ALLOW_DEMO_PREMIUM=true)');
+        addToast('Das Upgrade ist gerade nicht möglich. Bitte versuche es später erneut.', 'error');
       }
     } catch (e) {
       console.error(e);
@@ -38,7 +40,7 @@ export const PaywallScreen = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col px-6 py-12">
-      <button onClick={() => navigate(-1)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white transition-colors">
+      <button onClick={goBack} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white transition-colors">
         <X size={24} />
       </button>
 
@@ -51,11 +53,11 @@ export const PaywallScreen = () => {
         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 mb-8">
           <ul className="space-y-4">
             {[
-              "Alle Karriere-Szenarien (Gehalt, Pitch, etc.)",
-              "Souveränitätstraining (Politik & Krise)",
-              "Fremdsprachen-Simulationen (EN, FR, ES)",
-              "Erweiterte KI-Analysen",
-              "100% Werbefrei"
+              "Live-Gespräche: Die KI fragt nach (Bewerbung, Sales, Konflikt)",
+              "Alle Pro-Szenarien (Gehalt, Pitch, Vorstand, Krisen-PR …)",
+              "Fremdsprachen: Französisch, Spanisch, Italienisch",
+              "Kamera-Feedback zu Körpersprache und Blickkontakt",
+              "Mehr KI-Analysen pro Tag und mehr eigene Szenarien"
             ].map((feature, i) => (
               <li key={i} className="flex items-start gap-3">
                 <Check size={20} className="text-indigo-400 shrink-0 mt-0.5" />

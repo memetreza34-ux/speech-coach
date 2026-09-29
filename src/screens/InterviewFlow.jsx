@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Square, Loader2, ChevronLeft, Volume2, User, RefreshCcw, Check } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '../useGoBack';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRecorder } from '../useRecorder';
@@ -17,6 +18,7 @@ const INTERVIEW_START = 'Wir starten jetzt. Stelle dich als Interviewer vor und 
 export default function InterviewFlow() {
   const { modeId } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/arena');
   const { profile } = useAuth();
   const { addToast } = useToast();
   
@@ -264,7 +266,7 @@ export default function InterviewFlow() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">
       <div className="w-full max-w-2xl px-6 pt-12 pb-24 flex flex-col h-screen">
         <div className="flex items-center justify-between mb-8">
-          <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium">
+          <button onClick={goBack} className="text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 text-sm font-medium">
             <ChevronLeft size={18} /> Zurück
           </button>
           <div className="text-xs font-bold text-indigo-600 tracking-widest uppercase">Live-Interview</div>

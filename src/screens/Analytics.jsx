@@ -55,11 +55,11 @@ const SessionCard = ({ session, profile }) => {
         className="flex justify-between items-center cursor-pointer" 
         onClick={() => setExpanded(!expanded)}
       >
-        <div>
-          <div className="font-semibold text-slate-900">{session.modeLabel || getDisplayTitle(session.mode)}</div>
+        <div className="min-w-0 pr-3">
+          <div className="font-semibold text-slate-900 hyphens-auto break-words">{session.modeLabel || getDisplayTitle(session.mode)}</div>
           <div className="text-xs text-slate-500 mt-1">{date}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0 whitespace-nowrap">
           <div className="text-right flex items-center gap-4">
             <div>
               <div className="font-bold text-emerald-600">{session.confidenceScore === null || session.confidenceScore === undefined ? '–' : session.confidenceScore} <span className="text-xs font-normal text-slate-400">Score</span></div>

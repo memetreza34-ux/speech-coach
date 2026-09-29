@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { LogOut, Save, Crown, ShieldAlert, Zap, Target, Sparkles, Loader2, Trash2 } from 'lucide-react';
@@ -37,7 +38,7 @@ export const ProfileScreen = () => {
     try {
       await updateProfile(formData);
       addToast('Erfolgreich gespeichert!', 'success');
-    } catch (e) {
+    } catch {
       addToast('Fehler beim Speichern.', 'error');
     } finally {
       setSaving(false);
@@ -79,7 +80,7 @@ export const ProfileScreen = () => {
         addToast('Trainingsdaten erfolgreich gelöscht.', 'success');
         setConfirmModal({ isOpen: false, type: null });
       }
-    } catch (e) {
+    } catch {
       addToast("Fehler beim Löschen. Bitte versuche es erneut.", 'error');
       setConfirmModal({ isOpen: false, type: null });
     } finally {
@@ -110,7 +111,7 @@ export const ProfileScreen = () => {
               <Crown size={24} className="text-yellow-300" />
               <h3 className="font-bold text-lg">Pro Mitgliedschaft aktiv</h3>
             </div>
-            <p className="text-indigo-100 text-sm">Du hast Zugriff auf alle Szenarien und lernst werbefrei.</p>
+            <p className="text-indigo-100 text-sm">Du hast Zugriff auf alle Szenarien, Live-Gespräche und Kamera-Feedback.</p>
           </div>
         )}
 
@@ -140,20 +141,20 @@ export const ProfileScreen = () => {
           <p className="text-xs text-slate-500 mb-6">Diese Daten helfen der KI, die Coaching-Szenarien und das Feedback an dich anzupassen.</p>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Name</label>
-            <input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <label htmlFor="profile-name" className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Name</label>
+            <input id="profile-name" type="text" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Rolle / Beruf</label>
-            <input type="text" placeholder="z.B. Student, Manager" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
+            <label htmlFor="profile-role" className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Rolle / Beruf</label>
+            <input id="profile-role" type="text" placeholder="z.B. Student, Manager" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Alter</label>
-            <input type="number" placeholder="z.B. 28" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} />
+            <label htmlFor="profile-age" className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Alter</label>
+            <input id="profile-age" type="number" placeholder="z.B. 28" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Interessen</label>
-            <textarea placeholder="Wofür interessierst du dich?" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 resize-none h-24 transition-colors" value={formData.hobbies} onChange={e => setFormData({...formData, hobbies: e.target.value})} />
+            <label htmlFor="profile-hobbies" className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Interessen</label>
+            <textarea id="profile-hobbies" placeholder="Wofür interessierst du dich?" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-900 focus:outline-none focus:border-indigo-500 resize-none h-24 transition-colors" value={formData.hobbies} onChange={e => setFormData({...formData, hobbies: e.target.value})} />
           </div>
 
           <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-medium transition-colors mt-4">
@@ -240,6 +241,12 @@ export const ProfileScreen = () => {
         <button onClick={logout} className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-3.5 rounded-xl font-medium transition-colors hover:bg-slate-50">
           <LogOut size={18} /> Abmelden
         </button>
+
+        <div className="flex justify-center gap-4 mt-6 text-xs text-slate-400">
+          <Link to="/imprint" className="hover:text-slate-600">Impressum</Link>
+          <Link to="/privacy" className="hover:text-slate-600">Datenschutz</Link>
+          <Link to="/terms" className="hover:text-slate-600">Nutzungsbedingungen</Link>
+        </div>
       </div>
     </motion.div>
   );
